@@ -117,12 +117,14 @@ RAPIER.init().then(() => {
         }
     });
 
+    let body = graph.get('rigidBody1');
+
     engine.runRenderLoop(function(){
         world.step();
         let newPosition = rigidBody1.translation();
-        graph.get('rigidBody1').position.x = newPosition.x;
-        graph.get('rigidBody1').position.y = newPosition.y;
-        graph.get('rigidBody1').position.z = newPosition.z;
+        body.position.x = newPosition.x;
+        body.position.y = newPosition.y;
+        body.position.z = newPosition.z;
         scene.render();
 
     });
