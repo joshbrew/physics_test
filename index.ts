@@ -71,7 +71,7 @@ import renderworker from './workers/renderer.worker'
                                 const scene = new BABYLON.Scene(engine);
                                 const camera = new BABYLON.FreeCamera(
                                     'cam1', 
-                                    new BABYLON.Vector3(-50,10,0), 
+                                    new BABYLON.Vector3(-30,5,0), 
                                     scene
                                 );
 
@@ -125,6 +125,8 @@ import renderworker from './workers/renderer.worker'
                             update:function (self:WorkerCanvas, canvas, context, 
                                 data:{[key:string]:{ position:{x:number,y:number,z:number}, rotation:{x:number,y:number,z:number,w:number} }}) {
                                 
+                                //temp: manually setting non-buffered data by entity name.
+                                //better: keep entities in an ordered list between threads and buffer a float32array across threads (set up but not implemented)
                                 self.ball.position.x = data.ball.position.x;
                                 self.ball.position.y = data.ball.position.y;
                                 self.ball.position.z = data.ball.position.z;
