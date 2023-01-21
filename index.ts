@@ -1,3 +1,15 @@
+/*
+    TODO:
+        Fix camera controls on thread (might have to implement my own <_<)
+        Wrap mesh and physics settings together for a single init process
+        Implement navmeshes
+        Use buffering system to spam a thousand+ entities
+
+*/
+
+
+
+
 //import * as B from 'babylonjs'
 //import * as THREE from 'three'
 import { WorkerInfo } from 'graphscript';
@@ -119,9 +131,11 @@ import renderworker from './workers/renderer.worker'
                                 self.scene = scene;
                                 self.camera = camera;
                             },
+                            
                             draw:function (self:WorkerCanvas,canvas,context) {
                                 self.scene.render();
                             },
+
                             update:function (self:WorkerCanvas, canvas, context, 
                                 data:{[key:string]:{ position:{x:number,y:number,z:number}, rotation:{x:number,y:number,z:number,w:number} }}) {
                                 
@@ -150,11 +164,11 @@ import renderworker from './workers/renderer.worker'
                             'stepWorld',
                             portId,
                             'updateCanvas'
-                        ]);
+                        ]); //runs entirely off main thread
 
                         //todo: make a generator for this stuff for a simple config to setup
                         // the physics world 
-                        physics.run('addPhysicsEntity',{
+                        physics.post('addPhysicsEntity',{
                             _id:'ball',
                             collisionType:'ball',
                             collisionTypeParams:[1],
@@ -163,7 +177,7 @@ import renderworker from './workers/renderer.worker'
                             position:initialBallPosition
                         } as PhysicsEntity)
 
-                        physics.run('addPhysicsEntity',{
+                        physics.post('addPhysicsEntity',{
                             _id:'ground',
                             collisionType:'cuboid',
                             collisionTypeParams:[groundDimensions.width*.5,groundDimensions.height*.5,groundDimensions.depth*.5],
@@ -171,7 +185,7 @@ import renderworker from './workers/renderer.worker'
                             position:initialGroundPosition
                         } as PhysicsEntity)
 
-                        physics.run('animateWorld', [true,false]);
+                        physics.post('animateWorld', [true,false]);
                     });
                 }
             },
