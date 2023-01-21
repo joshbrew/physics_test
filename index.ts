@@ -152,6 +152,8 @@ import renderworker from './workers/renderer.worker'
                             'updateCanvas'
                         ]);
 
+                        //todo: make a generator for this stuff for a simple config to setup
+                        // the physics world 
                         physics.run('addPhysicsEntity',{
                             _id:'ball',
                             collisionType:'ball',
