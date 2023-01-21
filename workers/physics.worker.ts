@@ -2,6 +2,7 @@
 
 import RAPIER from '@dimforge/rapier3d-compat'
 import { GraphNode, WorkerService } from 'graphscript'
+import { PhysicsEntity } from './types';
 
 declare var WorkerGlobalScope;
 
@@ -19,20 +20,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 });
             },
             addPhysicsEntity:function (
-                settings:{
-                    collisionType:'ball'|'cuboid'|'capsule'|'cone'|'cylinder'|'triangle'|'segment'|'trimesh'|
-                        'convexHull'|'convexMesh'|'heightfield'|'polyline'|
-                        'roundCone'|'roundTriangle'|'roundCylinder'|'roundCuboid'|'roundConvexHull'|'roundConvexMesh',
-                    collisionTypeParams:any[], //e.g. radius, box dimensions
-                    dynamic?:boolean,
-                    position?:{x:number,y:number,z:number},
-                    rotation?:{x:number,y:number,z:number, w:number},
-                    mass?:number,
-                    centerOfMass?:{x:number,y:number,z:number},
-                    density?:number,
-                    restitution?:number,
-                     _id?:string
-                }
+                settings:PhysicsEntity
             ) {
                 let rtype = settings.dynamic ? RAPIER.RigidBodyType.Dynamic : RAPIER.RigidBodyType.Fixed; //also kinematic types, need to learn what those do
                 
@@ -136,11 +124,12 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 
                 return true;
             },
-            animateWorld:function() {
+            animateWorld:function(getValues?:boolean,buffered?:boolean) {
                 
+                let stepWorldNode = this.__node.graph.get('stepWorld');
                 let animate = () => {
                     if(this.__node.graph.worldIsAnimating) {
-                        (this.__node.graph.world as RAPIER.World).step();
+                        stepWorldNode.__operator(getValues,buffered);
                         requestAnimationFrame(animate);
                     }
                 }

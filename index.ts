@@ -7,7 +7,10 @@ import {
     WorkerService, 
     htmlloader, 
     workerCanvasRoutes 
-} from '../graphscript/index'//'graphscript'
+} from 'graphscript' //'../graphscript/index'//
+
+import {PhysicsEntity} from './workers/types'
+
 // import keyboard from 'keyboardjs'
 
 // import RAPIER from '@dimforge/rapier3d-compat'
@@ -36,6 +39,12 @@ import renderworker from './workers/renderer.worker'
                     //     elm.requestPointerLock();
                     // });
 
+                    let initialBallPosition = {x:0.0,y:10.0,z:0};
+                    let ballRadius = 1;
+                    
+                    let initialGroundPosition = {x:0,y:0,z:0}//{width:10, height:2, depth:10};
+                    let groundDimensions = {width:10, height:2, depth:10};
+
                     const controls = await graph.run(
                         'transferCanvas',
                         renderer.worker,
@@ -43,6 +52,13 @@ import renderworker from './workers/renderer.worker'
                             canvas:elm,
                             context:undefined,
                             _id:elm.id,
+                            
+                            initialBallPosition,
+                            ballRadius,
+                            initialGroundPosition,
+                            groundDimensions,
+
+
                             init:function (self:WorkerCanvas,canvas,context) {
                                 
                                 //this is a hack
@@ -55,7 +71,7 @@ import renderworker from './workers/renderer.worker'
                                 const scene = new BABYLON.Scene(engine);
                                 const camera = new BABYLON.FreeCamera(
                                     'cam1', 
-                                    new BABYLON.Vector3(-20,10,0), 
+                                    new BABYLON.Vector3(-50,10,0), 
                                     scene
                                 );
 
@@ -72,11 +88,30 @@ import renderworker from './workers/renderer.worker'
                                     new BABYLON.Vector3(0,1,0), 
                                     scene
                                 )
+
                                 const ball = new BABYLON.MeshBuilder.CreateSphere(
-                                    'ball1',
-                                    {diameter:2, segments: 32}, 
+                                    'ball',
+                                    {diameter:self.ballRadius*2, segments: 32}, 
                                     scene
                                 )
+                                
+                                ball.position.x = self.initialBallPosition.x;
+                                ball.position.y = self.initialBallPosition.y;
+                                ball.position.z = self.initialBallPosition.z;
+
+                                self.ball = ball;
+
+                                const ground = new BABYLON.MeshBuilder.CreateBox(
+                                    'ground',
+                                    self.groundDimensions,
+                                    scene
+                                );
+
+                                ground.position.x = self.initialGroundPosition.x;
+                                ground.position.y = self.initialGroundPosition.y;
+                                ground.position.z = self.initialGroundPosition.z;
+                                
+                                self.ground = ground;
 
                                 camera.setTarget(ball.position);
 
@@ -87,7 +122,16 @@ import renderworker from './workers/renderer.worker'
                             draw:function (self:WorkerCanvas,canvas,context) {
                                 self.scene.render();
                             },
-                            update:function (self:WorkerCanvas, canvas, context, data:any) {
+                            update:function (self:WorkerCanvas, canvas, context, 
+                                data:{[key:string]:{ position:{x:number,y:number,z:number}, rotation:{x:number,y:number,z:number,w:number} }}) {
+                                
+                                self.ball.position.x = data.ball.position.x;
+                                self.ball.position.y = data.ball.position.y;
+                                self.ball.position.z = data.ball.position.z;
+
+                                self.ground.position.x = data.ground.position.x;
+                                self.ground.position.y = data.ground.position.y;
+                                self.ground.position.z = data.ground.position.z;
 
                             },
                             clear:function (self:WorkerCanvas, canvas, context) {
@@ -96,17 +140,46 @@ import renderworker from './workers/renderer.worker'
                         },
                         'receiveBabylonCanvas'
                     ) as WorkerCanvasControls;
+
+                    //now let's setup the rapier thread to tell the render thread what to do
+
+                    physics.run('initWorld', { x: 0.0, y: -9.81, z:0 }).then(() => {
+                        renderer.post('subscribeToWorker',[
+                            'stepWorld',
+                            portId,
+                            'updateCanvas'
+                        ]);
+
+                        physics.run('addPhysicsEntity',{
+                            _id:'ball',
+                            collisionType:'ball',
+                            collisionTypeParams:[1],
+                            dynamic:true,
+                            restitution:2,
+                            position:initialBallPosition
+                        } as PhysicsEntity)
+
+                        physics.run('addPhysicsEntity',{
+                            _id:'ground',
+                            collisionType:'cuboid',
+                            collisionTypeParams:[groundDimensions.width*.5,groundDimensions.height*.5,groundDimensions.depth*.5],
+                            dynamic:false,
+                            position:initialGroundPosition
+                        } as PhysicsEntity)
+
+                        physics.run('animateWorld', [true,false]);
+                    });
                 }
             },
 
-            box:{
-                __element:'div',
-                style:{backgroundColor:'blue', height:'50px'},
-                __onrender:function(elm:HTMLElement) {
-                    console.log(elm,elm.addEventListener);
-                    elm.addEventListener('focus', (ev) => {console.log(ev)})
-                }
-            }
+            // testbox:{
+            //     __element:'div',
+            //     style:{backgroundColor:'blue', height:'50px'},
+            //     __onrender:function(elm:HTMLElement) {
+            //         console.log(elm,elm.addEventListener);
+            //         elm.addEventListener('focus', (ev) => {console.log(ev)})
+            //     }
+            // }
         },
         loaders:{
             htmlloader
