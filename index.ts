@@ -15,14 +15,13 @@ import {
 import physicsworker from './workers/physics.worker'
 import renderworker from './workers/renderer.worker'
 
-
     let graph = new WorkerService({
         roots:{
             ...workerCanvasRoutes,
             canvas:{
                 __element:'canvas',
                 style:{width:'100%', height:'100%'},
-                __onrender:function(elm) {
+                __onrender:async function(elm) {
 
                     //console.log(graph, elm);
                     const renderer = graph.addWorker({url:renderworker}) as WorkerInfo;
@@ -37,7 +36,7 @@ import renderworker from './workers/renderer.worker'
                     //     elm.requestPointerLock();
                     // });
 
-                    const controls = graph.run(
+                    const controls = await graph.run(
                         'transferCanvas',
                         renderer.worker,
                         {
