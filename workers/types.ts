@@ -13,5 +13,8 @@ export type PhysicsEntityProps = {
     centerOfMass?:{x:number,y:number,z:number},
     density?:number,
     restitution?:number,
-    _id?:string
+    _id?:string,
+
+    impulse?:{x:number,y:number,z:number} //initial impulse
+    force?:{x:number,y:number,z:number} //initial impulse
 }

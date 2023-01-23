@@ -62,28 +62,38 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     else collider = RAPIER.ColliderDesc.cuboid(0.5,0.5,0.5);
                 }
 
-                if(settings.density) {
-                    collider?.setDensity(settings.density);
-                }
-                if(settings.restitution) {
-                    collider?.setRestitution(settings.restitution);
-                }
-                if(settings.mass) {
-                    collider?.setMass(settings.mass);
-                } 
-                if(settings.centerOfMass) {
-                    collider?.setMassProperties(
-                        settings.mass as number,
-                        settings.centerOfMass,
-                        undefined as any,
-                        undefined as any
+                if(collider) {
+                    if(settings.density) {
+                        collider.setDensity(settings.density);
+                    }
+                    if(settings.restitution) {
+                        collider.setRestitution(settings.restitution);
+                    }
+                    if(settings.mass) {
+                        collider.setMass(settings.mass);
+                    } 
+                    if(settings.centerOfMass) {
+                        collider.setMassProperties(
+                            settings.mass as number,
+                            settings.centerOfMass,
+                            undefined as any,
+                            undefined as any
+                        );
+                    }
+
+                    ((this.__node.graph as WorkerService).world as RAPIER.World).createCollider(
+                        collider,
+                        rigidbody
                     );
                 }
 
-                ((this.__node.graph as WorkerService).world as RAPIER.World).createCollider(
-                    collider,
-                    rigidbody
-                );
+                
+                if(settings.impulse) {
+                    rigidbody.applyImpulse(settings.impulse,true);        
+                }
+                if(settings.force) {
+                    rigidbody.addForce(settings.force,true);
+                }
 
                 if(!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random()*1000000000000000)}`;
 
@@ -96,8 +106,6 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         ((node.__node.graph as WorkerService).world as RAPIER.World).removeRigidBody(rigidbody);
                     }
                 });
-
-                console.log(settings,node);
 
                 return node.__node.tag; //can control the rigid body node by proxy by passing this tag in
 
@@ -135,6 +143,12 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                             undefined as any,
                             undefined as any
                         );
+                    }
+                    if(settings.impulse) {
+                        entity.applyImpulse(settings.impulse,true);        
+                    }
+                    if(settings.force) {
+                        entity.addForce(settings.force,true);
                     }
                 }
             },
