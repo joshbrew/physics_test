@@ -53,7 +53,8 @@ let graph = new WorkerService({
                             radius:1,
                             dynamic:true,
                             restitution:2,
-                            position:{x:0,y:10,z:0}
+                            position:{x:0,y:10,z:0},
+                            impulse:{x:0,y:0,z:20}
                         },
                         {
                             _id:'ground',
@@ -61,6 +62,20 @@ let graph = new WorkerService({
                             dimensions:{width:10,height:1,depth:10},
                             dynamic:false,
                             position:{x:0,y:0,z:0}
+                        },
+                        {
+                            _id:'leftwall',
+                            collisionType:'cuboid',
+                            dimensions:{width:10,height:10,depth:1},
+                            dynamic:false,
+                            position:{x:0,y:5,z:-5}
+                        },
+                        {
+                            _id:'rightwall',
+                            collisionType:'cuboid',
+                            dimensions:{width:10,height:10,depth:1},
+                            dynamic:false,
+                            position:{x:0,y:5,z:5}
                         }
                     ]
                 );
