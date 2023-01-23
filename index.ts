@@ -109,7 +109,15 @@ let graph = new WorkerService({
                             dynamic:false,
                             restitution:1,
                             position:{x:0,y:5,z:5}
-                        }
+                        },
+                        {
+                            _id:'ground2',
+                            collisionType:'cuboid',
+                            dimensions:{width:10000,height:1,depth:10000},
+                            dynamic:false,
+                            restitution:1,
+                            position:{x:0,y:-10,z:0}
+                        },
                     ]
                 );
             }

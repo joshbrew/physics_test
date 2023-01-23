@@ -46,21 +46,26 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         });
                         setTimeout(() => { engine.setSize(canvas.clientWidth,canvas.clientHeight);  });
         
-                        const light = new BABYLON.HemisphericLight(
+                        const light = new BABYLON.SpotLight(
                             'light1', 
-                            new BABYLON.Vector3(0,1,0), 
+                            new BABYLON.Vector3(0,30,0),
+                            new BABYLON.Vector3(0,-1,0),
+                            1,
+                            2,
                             scene
                         )
-        
+                        const shadowGenerator = new BABYLON.ShadowGenerator(1024,light);
+
                         let entityNames;
         
                         self.engine = engine;
                         self.scene = scene;
                         self.camera = camera;
+                        self.shadowGenerator = shadowGenerator;
 
                         if(self.entities) {
                             entityNames = self.entities.map((e) => {
-                                let entity = self.graph.run('loadBabylonEntity', scene, e); 
+                                let entity = self.graph.run('loadBabylonEntity', self, scene, e); 
                                 return e._id; 
                             })
                         }
@@ -113,7 +118,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
 
                 return renderId;
             },
-            loadBabylonEntity:(scene:BABYLON.Scene, settings:PhysicsEntityProps) => {
+            loadBabylonEntity:(self,scene:BABYLON.Scene, settings:PhysicsEntityProps) => {
                 let entity: BABYLON.Mesh | undefined;
                 //limited settings rn for simplicity to work with the physics engine
                 if(settings.collisionType === 'ball') {
@@ -172,9 +177,16 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                             settings.rotation.w
                         );
                     } else entity.rotationQuaternion = new BABYLON.Quaternion();
-                    
+                
+                    entity.receiveShadows = true;
+
+                    if(self.shadowGenerator) {
+                        (self.shadowGenerator as BABYLON.ShadowGenerator).addShadowCaster(entity);
+                    }
                 
                 }
+
+
 
                 return entity;
             },
