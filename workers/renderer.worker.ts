@@ -87,12 +87,12 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                                 mesh.position.y = data[key].position.y;
                                 mesh.position.z = data[key].position.z;
 
-                                mesh.rotationQuaternion = new BABYLON.Quaternion(
-                                    data[key].rotation.x,
-                                    data[key].rotation.y,
-                                    data[key].rotation.z,
-                                    data[key].rotation.w
-                                );
+                                if(mesh.rotationQuaternion) {
+                                    mesh.rotationQuaternion._x = data[key].rotation.x
+                                    mesh.rotationQuaternion._y = data[key].rotation.y
+                                    mesh.rotationQuaternion._z = data[key].rotation.z
+                                    mesh.rotationQuaternion._w = data[key].rotation.w
+                                }
                             }
                             idx++;
                         }
@@ -165,13 +165,13 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     }
     
                     if(settings.rotation) {
-                        new BABYLON.Quaternion(
+                        entity.rotationQuaternion = new BABYLON.Quaternion(
                             settings.rotation.x, 
                             settings.rotation.y,
                             settings.rotation.z,
                             settings.rotation.w
                         );
-                    }
+                    } else entity.rotationQuaternion = new BABYLON.Quaternion();
                     
                 
                 }
