@@ -52,7 +52,7 @@ let graph = new WorkerService({
                             collisionType:'ball',
                             radius:1,
                             dynamic:true,
-                            restitution:1,
+                            restitution:0.9,
                             position:{x:0,y:10,z:0},
                             impulse:{x:0,y:0,z:20}
                         },
@@ -61,7 +61,7 @@ let graph = new WorkerService({
                             collisionType:'ball',
                             radius:1,
                             dynamic:true,
-                            restitution:1,
+                            restitution:0.9,
                             position:{x:0,y:10,z:5},
                             impulse:{x:0,y:10,z:-20}
                         },
@@ -70,7 +70,7 @@ let graph = new WorkerService({
                             collisionType:'ball',
                             radius:1,
                             dynamic:true,
-                            restitution:1,
+                            restitution:0.9,
                             position:{x:0,y:5,z:-3},
                             impulse:{x:0,y:0,z:30}
                         },
