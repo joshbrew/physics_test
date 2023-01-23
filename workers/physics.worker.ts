@@ -162,23 +162,25 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     let values = buffered ? new Float32Array((this.__node.graph.world as RAPIER.World).bodies.len() * 7) : {};
                     let idx = 0;
                     let bufferValues = (body:RAPIER.RigidBody) => {
-                        if(buffered) {
-                            let position = body.translation();
-                            let rotation = body.rotation();
-
-                            let offset = idx*7;
-
-                            values[offset]   = position.x;
-                            values[offset+1] = position.y;
-                            values[offset+2] = position.z;
-                            values[offset+3] = rotation.x;
-                            values[offset+4] = rotation.y;
-                            values[offset+5] = rotation.z;
-                            values[offset+6] = rotation.w;
-                        }
-                        else values[(body as any)._id] = {
-                            position:body.translation(),
-                            rotation:body.rotation()
+                        if(body.isDynamic()) {
+                            if(buffered) {
+                                let position = body.translation();
+                                let rotation = body.rotation();
+    
+                                let offset = idx*7;
+    
+                                values[offset]   = position.x;
+                                values[offset+1] = position.y;
+                                values[offset+2] = position.z;
+                                values[offset+3] = rotation.x;
+                                values[offset+4] = rotation.y;
+                                values[offset+5] = rotation.z;
+                                values[offset+6] = rotation.w;
+                            }
+                            else values[(body as any)._id] = {
+                                position:body.translation(),
+                                rotation:body.rotation()
+                            }
                         }
                         idx++;
                     }

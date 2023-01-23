@@ -67,7 +67,7 @@ let graph = new WorkerService({
                             impulse:{x:0,y:10,z:-20}
                         },
                         {
-                            _id:'capsule',
+                            _id:'capsule1',
                             collisionType:'capsule',
                             radius:1,
                             halfHeight:2,
