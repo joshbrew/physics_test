@@ -57,6 +57,24 @@ let graph = new WorkerService({
                             impulse:{x:0,y:0,z:20}
                         },
                         {
+                            _id:'ball2',
+                            collisionType:'ball',
+                            radius:1,
+                            dynamic:true,
+                            restitution:1,
+                            position:{x:0,y:10,z:5},
+                            impulse:{x:0,y:10,z:-20}
+                        },
+                        {
+                            _id:'ball3',
+                            collisionType:'ball',
+                            radius:1,
+                            dynamic:true,
+                            restitution:1,
+                            position:{x:0,y:5,z:-3},
+                            impulse:{x:0,y:0,z:30}
+                        },
+                        {
                             _id:'ground',
                             collisionType:'cuboid',
                             dimensions:{width:10,height:1,depth:10},
