@@ -12,6 +12,7 @@ export type PhysicsEntityProps = {
     mass?:number,
     centerOfMass?:{x:number,y:number,z:number},
     density?:number,
+    friction?:number,
     restitution?:number,
     _id?:string,
 

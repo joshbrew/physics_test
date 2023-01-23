@@ -77,6 +77,10 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         collider,
                         rigidbody
                     );
+
+                    if(settings.friction) {
+                        collider.setFriction(settings.friction);
+                    } 
                 }
 
                 
