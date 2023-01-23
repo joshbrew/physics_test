@@ -56,7 +56,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 } else if (settings.collisionType === 'ball') {
                     collider = RAPIER.ColliderDesc.ball(settings.radius ? settings.radius : 1);
                 } else if (settings.collisionType === 'capsule') {
-                    collider = RAPIER.ColliderDesc.capsule(settings.halfHeight ? settings.halfHeight : .5, settings.radius ? settings.radius : 1);
+                    collider = RAPIER.ColliderDesc.capsule(settings.halfHeight ? settings.halfHeight*.5 : 1, settings.radius ? settings.radius : 1);
                 } else if (settings.collisionType === 'cuboid') {
                     if(settings.dimensions) collider = RAPIER.ColliderDesc.cuboid(settings.dimensions.width*.5, settings.dimensions.height*.5, settings.dimensions.depth*.5);
                     else collider = RAPIER.ColliderDesc.cuboid(0.5,0.5,0.5);

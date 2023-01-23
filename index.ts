@@ -54,7 +54,8 @@ let graph = new WorkerService({
                             dynamic:true,
                             restitution:0.9,
                             position:{x:0,y:10,z:0},
-                            impulse:{x:0,y:0,z:20}
+                            impulse:{x:0,y:0,z:20},
+                            //force:{x:0,y:0,z:30}
                         },
                         {
                             _id:'ball2',
@@ -66,11 +67,12 @@ let graph = new WorkerService({
                             impulse:{x:0,y:10,z:-20}
                         },
                         {
-                            _id:'ball3',
-                            collisionType:'ball',
+                            _id:'capsule',
+                            collisionType:'capsule',
                             radius:1,
+                            halfHeight:2,
                             dynamic:true,
-                            restitution:0.9,
+                            restitution:0.5,
                             position:{x:0,y:5,z:-3},
                             impulse:{x:0,y:0,z:30}
                         },
