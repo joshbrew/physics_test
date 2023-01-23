@@ -34,22 +34,11 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     rtype
                 );
 
-                if(settings.position) {
-                    desc.setTranslation(
-                        settings.position.x,
-                        settings.position.y,
-                        settings.position.z
-                    );
-                }
-                if(settings.rotation) {
-                    desc.setRotation(settings.rotation);
-                }
-
                 let rigidbody = (this.__node.graph.world as RAPIER.World).createRigidBody(
                     desc
                 )
 
-                let collider;
+                let collider: RAPIER.ColliderDesc | undefined;
                 if(settings.collisionTypeParams) {
                     //@ts-ignore //fuk u tuples
                     collider = RAPIER.ColliderDesc[settings.collisionType](...settings.collisionTypeParams) as ColliderDesc;
@@ -57,8 +46,8 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     collider = RAPIER.ColliderDesc.ball(settings.radius ? settings.radius : 1);
                 } else if (settings.collisionType === 'capsule') {
                     collider = RAPIER.ColliderDesc.capsule(
-                        settings.halfHeight ? settings.halfHeight*0.8 : 1, 
-                        settings.radius ? settings.radius*0.8 : 1
+                        settings.halfHeight ? settings.halfHeight : 1, 
+                        settings.radius ? settings.radius : 1
                     );
                 } else if (settings.collisionType === 'cuboid') {
                     if(settings.dimensions) collider = RAPIER.ColliderDesc.cuboid(settings.dimensions.width*.5, settings.dimensions.height*.5, settings.dimensions.depth*.5);
@@ -91,11 +80,18 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 }
 
                 
+                if(settings.position) {
+                    rigidbody.setTranslation(settings.position,false);
+                }
+                if(settings.rotation) {
+                    rigidbody.setRotation(settings.rotation,false);
+                }
+
                 if(settings.impulse) {
-                    rigidbody.applyImpulse(settings.impulse,true);        
+                    rigidbody.applyImpulse(settings.impulse,false);        
                 }
                 if(settings.force) {
-                    rigidbody.addForce(settings.force,true);
+                    rigidbody.addForce(settings.force,false);
                 }
 
                 if(!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random()*1000000000000000)}`;
@@ -117,30 +113,26 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 return typeof (this.__node.graph as WorkerService).remove(_id) !== 'string';
             },
             updatePhysicsEntity:function(_id:string,settings:Partial<PhysicsEntityProps>){
-                let entity = this.__node.graph.get(_id);
+                let entity = this.__node.graph.get(_id) as RAPIER.RigidBody;
                 if(entity as RAPIER.RigidBody) {
                     if(settings.position) {
-                        entity.setTranslation(
-                            settings.position.x,
-                            settings.position.y,
-                            settings.position.z
-                        );
+                        entity.setTranslation(settings.position,true);
                     }
                     if(settings.rotation) {
-                        entity.setRotation(settings.rotation);
+                        entity.setRotation(settings.rotation,true);
                     }
     
                     if(settings.density) {
-                        entity.setDensity(settings.density);
+                        entity.collider(0).setDensity(settings.density);
                     }
                     if(settings.restitution) {
-                        entity.setRestitution(settings.restitution);
+                        entity.collider(0).setRestitution(settings.restitution);
                     }
                     if(settings.mass) {
-                        entity.setMass(settings.mass);
+                        entity.collider(0).setMass(settings.mass);
                     } 
                     if(settings.centerOfMass) {
-                        entity.setMassProperties(
+                        entity.collider(0).setMassProperties(
                             settings.mass as number,
                             settings.centerOfMass,
                             undefined as any,

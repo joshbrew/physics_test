@@ -67,14 +67,24 @@ let graph = new WorkerService({
                             impulse:{x:0,y:10,z:-20}
                         },
                         {
-                            _id:'capsule1',
+                            _id:'capsule1', //kinda jank
                             collisionType:'capsule',
                             radius:1,
-                            halfHeight:2,
+                            halfHeight:1,
                             dynamic:true,
                             restitution:0.5,
                             position:{x:0,y:5,z:-3},
+                            rotation:{x:1,y:0,z:0,w:1},
                             impulse:{x:0,y:0,z:30}
+                        },
+                        {
+                            _id:'box1', //kinda jank
+                            collisionType:'cuboid',
+                            dimensions:{width:2,height:2,depth:2},
+                            dynamic:true,
+                            restitution:0.1,
+                            position:{x:0,y:15,z:3},
+                            //impulse:{x:0,y:0,z:0}
                         },
                         {
                             _id:'ground',

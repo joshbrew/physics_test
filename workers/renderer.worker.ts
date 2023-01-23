@@ -4,6 +4,7 @@ import { PhysicsEntityProps } from './types';
 
 declare var WorkerGlobalScope
 
+
 if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
 
     const graph = new WorkerService({
@@ -28,6 +29,13 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                             new BABYLON.Vector3(-30,5,0), 
                             scene
                         );
+                        
+                        try{
+                            //const nav = new BABYLON.RecastJSPlugin(); //https://playground.babylonjs.com/#TN7KNN#2
+                            //nav.setWorkerURL('./workers/navmesh.worker.js');
+                        } catch(er) {
+                            console.error(er);
+                        }
         
                         camera.attachControl(canvas,false);
                         camera.setTarget(new BABYLON.Vector3(0,0,0));
@@ -70,20 +78,23 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                             rotation:{x:number,y:number,z:number,w:number} 
                         }}) {
 
+                        let idx = 0;
                         for(const key in data) {
                             let mesh = (self.scene as BABYLON.Scene).getMeshByName(key);
+                            //console.log(JSON.stringify(mesh?.rotation),JSON.stringify(data[key].rotation))
                             if(mesh) {
-                                if(mesh.position) {
-                                    mesh.position.x = data[key].position.x;
-                                    mesh.position.y = data[key].position.y;
-                                    mesh.position.z = data[key].position.z;
-                                }
-                                if(mesh.rotation) {
-                                    mesh.rotation.x = data[key].rotation.x;
-                                    mesh.rotation.y = data[key].rotation.y;
-                                    mesh.rotation.z = data[key].rotation.z;
-                                }
+                                mesh.position.x = data[key].position.x;
+                                mesh.position.y = data[key].position.y;
+                                mesh.position.z = data[key].position.z;
+
+                                mesh.rotationQuaternion = new BABYLON.Quaternion(
+                                    data[key].rotation.x,
+                                    data[key].rotation.y,
+                                    data[key].rotation.z,
+                                    data[key].rotation.w
+                                );
                             }
+                            idx++;
                         }
 
         
@@ -103,7 +114,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 return renderId;
             },
             loadBabylonEntity:(scene:BABYLON.Scene, settings:PhysicsEntityProps) => {
-                let entity;
+                let entity: BABYLON.Mesh | undefined;
                 //limited settings rn for simplicity to work with the physics engine
                 if(settings.collisionType === 'ball') {
                     if(!settings._id) settings._id = `ball${Math.floor(Math.random()*1000000000000000)}`
@@ -122,8 +133,8 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     entity = BABYLON.MeshBuilder.CreateCapsule(
                         settings._id,
                         { 
-                            radius:settings.radius ? settings.radius : settings.collisionTypeParams ? settings.collisionTypeParams[0]*2 : 1, 
-                            height:settings.halfHeight ? settings.halfHeight*2 : settings.collisionTypeParams ? settings.collisionTypeParams[1]*2 : 1,
+                            radius:settings.radius ? settings.radius*1 : settings.collisionTypeParams ? settings.collisionTypeParams[0]*1*1 : 1, 
+                            height:settings.halfHeight ? settings.halfHeight*2*2 : settings.collisionTypeParams ? settings.collisionTypeParams[1]*2*2 : 2,
                             tessellation:12,
                             capSubdivisions:12,
                             
@@ -143,22 +154,28 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         } : {width:1,height:1,depth:1},
                         scene
                     );
-
-                    console.log(entity, settings);
                 }
 
-                if(settings.position) {
-                    entity.position.x = settings.position.x;
-                    entity.position.y = settings.position.y;
-                    entity.position.z = settings.position.z;
+                if(entity) {
+
+                    if(settings.position) {
+                        entity.position.x = settings.position.x;
+                        entity.position.y = settings.position.y;
+                        entity.position.z = settings.position.z;
+                    }
+    
+                    if(settings.rotation) {
+                        new BABYLON.Quaternion(
+                            settings.rotation.x, 
+                            settings.rotation.y,
+                            settings.rotation.z,
+                            settings.rotation.w
+                        );
+                    }
+                    
+                
                 }
 
-                if(settings.rotation) {
-                    entity.rotation.x = settings.rotation.x;
-                    entity.rotation.y = settings.rotation.y;
-                    entity.rotation.z = settings.rotation.z;
-                }
-            
                 return entity;
             },
             removeEntity:function (scene:BABYLON.Scene, entity:string) {
