@@ -2,7 +2,7 @@
 
 import RAPIER from '@dimforge/rapier3d-compat'
 import { GraphNode, WorkerService } from 'graphscript'
-import { PhysicsEntity } from './types';
+import { PhysicsEntityProps } from './types';
 
 declare var WorkerGlobalScope;
 
@@ -10,17 +10,23 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
 
     const graph = new WorkerService({
         roots:{
-            initWorld:function(gravity?:{x:number,y:number,z:number},...args:any[]) {
+            initWorld:function(entities?:PhysicsEntityProps[],gravity?:{x:number,y:number,z:number},...args:any[]) {
                 return new Promise((res) => {
                     RAPIER.init().then(() =>{
                         if(!gravity) gravity = { x: 0.0, y: -9.81, z:0 }; //for babylonjs we'll use y = -9.81 for correct world orientation
                         (this.__node.graph as WorkerService).world = new RAPIER.World(gravity,...args);
-                        res(true); //rapier is ready
+                        if(entities) {
+                            let tags = entities.map((props) => {
+                                return this.__node.graph.run('addPhysicsEntity', props);
+                            });
+                            res(tags);
+                        }
+                        else res(true); //rapier is ready
                     });
                 });
             },
             addPhysicsEntity:function (
-                settings:PhysicsEntity
+                settings:PhysicsEntityProps
             ) {
                 let rtype = settings.dynamic ? RAPIER.RigidBodyType.Dynamic : RAPIER.RigidBodyType.Fixed; //also kinematic types, need to learn what those do
                 
@@ -43,8 +49,18 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     desc
                 )
 
-                //@ts-ignore //fuk u tuples
-                let collider = RAPIER.ColliderDesc[settings.collisionType](...settings.collisionTypeParams) as ColliderDesc;
+                let collider;
+                if(settings.collisionTypeParams) {
+                    //@ts-ignore //fuk u tuples
+                    collider = RAPIER.ColliderDesc[settings.collisionType](...settings.collisionTypeParams) as ColliderDesc;
+                } else if (settings.collisionType === 'ball') {
+                    collider = RAPIER.ColliderDesc.ball(settings.radius ? settings.radius : 1);
+                } else if (settings.collisionType === 'capsule') {
+                    collider = RAPIER.ColliderDesc.capsule(settings.halfHeight ? settings.halfHeight : .5, settings.radius ? settings.radius : 1);
+                } else if (settings.collisionType === 'cuboid') {
+                    if(settings.dimensions) collider = RAPIER.ColliderDesc.cuboid(settings.dimensions.width*.5, settings.dimensions.height*.5, settings.dimensions.depth*.5);
+                    else collider = RAPIER.ColliderDesc.cuboid(0.5,0.5,0.5);
+                }
 
                 if(settings.density) {
                     collider?.setDensity(settings.density);
@@ -81,11 +97,46 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     }
                 });
 
+                console.log(settings,node);
+
                 return node.__node.tag; //can control the rigid body node by proxy by passing this tag in
 
             },
             removePhysicsEntity:function(_id:string) {
                 return typeof (this.__node.graph as WorkerService).remove(_id) !== 'string';
+            },
+            updatePhysicsEntity:function(_id:string,settings:Partial<PhysicsEntityProps>){
+                let entity = this.__node.graph.get(_id);
+                if(entity as RAPIER.RigidBody) {
+                    if(settings.position) {
+                        entity.setTranslation(
+                            settings.position.x,
+                            settings.position.y,
+                            settings.position.z
+                        );
+                    }
+                    if(settings.rotation) {
+                        entity.setRotation(settings.rotation);
+                    }
+    
+                    if(settings.density) {
+                        entity.setDensity(settings.density);
+                    }
+                    if(settings.restitution) {
+                        entity.setRestitution(settings.restitution);
+                    }
+                    if(settings.mass) {
+                        entity.setMass(settings.mass);
+                    } 
+                    if(settings.centerOfMass) {
+                        entity.setMassProperties(
+                            settings.mass as number,
+                            settings.centerOfMass,
+                            undefined as any,
+                            undefined as any
+                        );
+                    }
+                }
             },
             stepWorld:function(
                 getValues?:boolean,

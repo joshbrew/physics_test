@@ -18,191 +18,68 @@ import {
     WorkerCanvasControls, 
     WorkerService, 
     htmlloader, 
-    workerCanvasRoutes 
+    workerCanvasRoutes,
+    Loader
 } from 'graphscript' //'../graphscript/index'//
 
-import {PhysicsEntity} from './workers/types'
+import {PhysicsEntityProps} from './workers/types'
+import physicsworker from './workers/physics.worker'
+import renderworker from './workers/renderer.worker'
 
 // import keyboard from 'keyboardjs'
 
 // import RAPIER from '@dimforge/rapier3d-compat'
 
-import physicsworker from './workers/physics.worker'
-import renderworker from './workers/renderer.worker'
+import { createRenderer } from './renderer';
 
-    let graph = new WorkerService({
-        roots:{
-            ...workerCanvasRoutes,
-            canvas:{
-                __element:'canvas',
-                style:{width:'100%', height:'100%'},
-                __onrender:async function(elm) {
+let renderId = 'canvas';
 
-                    //console.log(graph, elm);
-                    const renderer = graph.addWorker({url:renderworker}) as WorkerInfo;
-                    const physics = graph.addWorker({url:physicsworker}) as WorkerInfo;
 
-                    const portId = graph.establishMessageChannel(
-                        renderer.worker, 
-                        physics.worker
-                    );
-
-                    // elm.addEventListener('click', () => {
-                    //     elm.requestPointerLock();
-                    // });
-
-                    let initialBallPosition = {x:0.0,y:10.0,z:0};
-                    let ballRadius = 1;
-                    
-                    let initialGroundPosition = {x:0,y:0,z:0}//{width:10, height:2, depth:10};
-                    let groundDimensions = {width:10, height:2, depth:10};
-
-                    const controls = await graph.run(
-                        'transferCanvas',
-                        renderer.worker,
+let graph = new WorkerService({
+    roots:{
+        ...workerCanvasRoutes,
+        [renderId]:{
+            __element:'canvas',
+            style:{width:'100%', height:'100%'},
+            __onrender:async function(elm) {
+                createRenderer(
+                    elm,
+                    this,
+                    graph,
+                    [
                         {
-                            canvas:elm,
-                            context:undefined,
-                            _id:elm.id,
-                            
-                            initialBallPosition,
-                            ballRadius,
-                            initialGroundPosition,
-                            groundDimensions,
-
-
-                            init:function (self:WorkerCanvas,canvas,context) {
-                                
-                                //this is a hack
-                                globalThis.document.addEventListener = (...args:any[]) => {
-                                    canvas.addEventListener(...args);
-                                } 
-
-                                const BABYLON = self.BABYLON;
-                                const engine = new BABYLON.Engine(canvas);
-                                const scene = new BABYLON.Scene(engine);
-                                const camera = new BABYLON.FreeCamera(
-                                    'cam1', 
-                                    new BABYLON.Vector3(-30,5,0), 
-                                    scene
-                                );
-
-                                camera.attachControl(canvas,false);
-                                console.log(camera);
-
-                                canvas.addEventListener('resize', () => { 
-                                    engine.setSize(canvas.clientWidth,canvas.clientHeight); //manual resize
-                                });
-                                setTimeout(() => { engine.setSize(canvas.clientWidth,canvas.clientHeight);  });
-
-                                const light = new BABYLON.HemisphericLight(
-                                    'light1', 
-                                    new BABYLON.Vector3(0,1,0), 
-                                    scene
-                                )
-
-                                const ball = new BABYLON.MeshBuilder.CreateSphere(
-                                    'ball',
-                                    {diameter:self.ballRadius*2, segments: 32}, 
-                                    scene
-                                )
-                                
-                                ball.position.x = self.initialBallPosition.x;
-                                ball.position.y = self.initialBallPosition.y;
-                                ball.position.z = self.initialBallPosition.z;
-
-                                self.ball = ball;
-
-                                const ground = new BABYLON.MeshBuilder.CreateBox(
-                                    'ground',
-                                    self.groundDimensions,
-                                    scene
-                                );
-
-                                ground.position.x = self.initialGroundPosition.x;
-                                ground.position.y = self.initialGroundPosition.y;
-                                ground.position.z = self.initialGroundPosition.z;
-                                
-                                self.ground = ground;
-
-                                camera.setTarget(ball.position);
-
-                                self.engine = engine;
-                                self.scene = scene;
-                                self.camera = camera;
-                            },
-                            
-                            draw:function (self:WorkerCanvas,canvas,context) {
-                                self.scene.render();
-                            },
-
-                            update:function (self:WorkerCanvas, canvas, context, 
-                                data:{[key:string]:{ position:{x:number,y:number,z:number}, rotation:{x:number,y:number,z:number,w:number} }}) {
-                                
-                                //temp: manually setting non-buffered data by entity name.
-                                //better: keep entities in an ordered list between threads and buffer a float32array across threads (set up but not implemented)
-                                self.ball.position.x = data.ball.position.x;
-                                self.ball.position.y = data.ball.position.y;
-                                self.ball.position.z = data.ball.position.z;
-
-                                self.ground.position.x = data.ground.position.x;
-                                self.ground.position.y = data.ground.position.y;
-                                self.ground.position.z = data.ground.position.z;
-
-                            },
-                            clear:function (self:WorkerCanvas, canvas, context) {
-                                self.scene.dispose();
-                            }
-                        },
-                        'receiveBabylonCanvas'
-                    ) as WorkerCanvasControls;
-
-                    //now let's setup the rapier thread to tell the render thread what to do
-
-                    physics.run('initWorld', { x: 0.0, y: -9.81, z:0 }).then(() => {
-                        renderer.post('subscribeToWorker',[
-                            'stepWorld',
-                            portId,
-                            'updateCanvas'
-                        ]); //runs entirely off main thread
-
-                        //todo: make a generator for this stuff for a simple config to setup
-                        // the physics world 
-                        physics.post('addPhysicsEntity',{
                             _id:'ball',
                             collisionType:'ball',
-                            collisionTypeParams:[1],
+                            radius:1,
                             dynamic:true,
                             restitution:2,
-                            position:initialBallPosition
-                        } as PhysicsEntity)
-
-                        physics.post('addPhysicsEntity',{
+                            position:{x:0,y:10,z:0}
+                        },
+                        {
                             _id:'ground',
                             collisionType:'cuboid',
-                            collisionTypeParams:[groundDimensions.width*.5,groundDimensions.height*.5,groundDimensions.depth*.5],
+                            dimensions:{width:10,height:1,depth:10},
                             dynamic:false,
-                            position:initialGroundPosition
-                        } as PhysicsEntity)
-
-                        physics.post('animateWorld', [true,false]);
-                    });
-                }
-            },
-
-            // testbox:{
-            //     __element:'div',
-            //     style:{backgroundColor:'blue', height:'50px'},
-            //     __onrender:function(elm:HTMLElement) {
-            //         console.log(elm,elm.addEventListener);
-            //         elm.addEventListener('focus', (ev) => {console.log(ev)})
-            //     }
-            // }
+                            position:{x:0,y:0,z:0}
+                        }
+                    ]
+                );
+            }
         },
-        loaders:{
-            htmlloader
-        }
-    });
+
+        // testbox:{
+        //     __element:'div',
+        //     style:{backgroundColor:'blue', height:'50px'},
+        //     __onrender:function(elm:HTMLElement) {
+        //         console.log(elm,elm.addEventListener);
+        //         elm.addEventListener('focus', (ev) => {console.log(ev)})
+        //     }
+        // }
+    },
+    loaders:{
+        htmlloader
+    }
+});
 
 // RAPIER.init().then(() => {
     
@@ -262,8 +139,6 @@ import renderworker from './workers/renderer.worker'
 
     //let model = {
 
-        
-    
         // engine:{
         //     __props:engine
         // },
