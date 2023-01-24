@@ -49,7 +49,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         self.engine = engine;
                         self.scene = scene;
 
-                        self.camera = this.__node.graph.run('attachCamera', engine, scene, canvas);
+                        self.camera = this.__node.graph.run('attachCamera', scene, canvas);
 
                         self.shadowGenerator = shadowGenerator;
 
@@ -247,7 +247,6 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 return renderId;
             },
             attachCamera:function (
-                engine:BABYLON.Engine,
                 scene:BABYLON.Scene, 
                 canvas:OffscreenCanvas
             ) {
@@ -261,12 +260,8 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
 
                 camera.setTarget(new BABYLON.Vector3(0,0,0));
 
-                let magnitude = (x,y,z) => {
-                    return Math.sqrt(x*x + y*y + z*z);
-                }
-
                 camera.speed = 0.5;
-                
+
                 let w = () => {
                     camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Forward().scale(camera.speed)))
                 }
@@ -334,8 +329,8 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         let dMouseX = ev.clientX - lastMouseMove.clientX;
                         let dMouseY = ev.clientY - lastMouseMove.clientY;
 
-                        camera.rotation.y += 2*dMouseX/canvas.width; 
-                        camera.rotation.x += 2*dMouseY/canvas.height;
+                        camera.rotation.y += 4*dMouseX/canvas.width; 
+                        camera.rotation.x += 4*dMouseY/canvas.height;
                     }
                     lastMouseMove = ev;
                 }
