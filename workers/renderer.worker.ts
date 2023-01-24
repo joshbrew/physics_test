@@ -261,17 +261,23 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
 
                 camera.setTarget(new BABYLON.Vector3(0,0,0));
 
+                let magnitude = (x,y,z) => {
+                    return Math.sqrt(x*x + y*y + z*z);
+                }
+
+                camera.speed = 0.5;
+                
                 let w = () => {
-                    camera.position.x += 3*camera.speed/engine.getFps()
+                    camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Forward().scale(camera.speed)))
                 }
                 let a = () => {
-                    camera.position.z += 3*camera.speed/engine.getFps()
+                    camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Left().scale(camera.speed)))
                 }
                 let s = () => {
-                    camera.position.x -= 3*camera.speed/engine.getFps()
+                    camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Backward().scale(camera.speed)))
                 }
                 let d = () => {
-                    camera.position.z -= 3*camera.speed/engine.getFps()
+                    camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Right().scale(camera.speed)))
                 }
                 
                 let wobserver, aobserver, sobserver, dobserver;
@@ -293,6 +299,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 });
                
                 canvas.addEventListener('keyup', (ev:any) => {
+                    
                     if(ev.keyCode === 87 || ev.keycode === 38) {
                         if(wobserver) {
                             scene.onBeforeRenderObservable.remove(wobserver);
@@ -321,12 +328,13 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 });
                 
                 let lastMouseMove;
+
                 let mousemove = (ev:any) => {
                     if(lastMouseMove) {
                         let dMouseX = ev.clientX - lastMouseMove.clientX;
                         let dMouseY = ev.clientY - lastMouseMove.clientY;
 
-                        camera.rotation.y += 2*dMouseX/canvas.width;
+                        camera.rotation.y += 2*dMouseX/canvas.width; 
                         camera.rotation.x += 2*dMouseY/canvas.height;
                     }
                     lastMouseMove = ev;
