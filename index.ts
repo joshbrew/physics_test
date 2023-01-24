@@ -20,7 +20,7 @@ import {
     htmlloader, 
     workerCanvasRoutes,
     Loader
-} from 'graphscript' //'../graphscript/index'//
+} from '../graphscript/index'//
 
 import {PhysicsEntityProps} from './workers/types'
 import physicsworker from './workers/physics.worker'
@@ -53,8 +53,8 @@ let graph = new WorkerService({
                             radius:1,
                             dynamic:true,
                             restitution:0.9,
-                            position:{x:0,y:10,z:0},
-                            impulse:{x:0,y:0,z:20},
+                            position:{x:3,y:2,z:3},
+                            impulse:{x:0,y:0,z:0},
                             //force:{x:0,y:0,z:30}
                         },
                         {
@@ -75,7 +75,7 @@ let graph = new WorkerService({
                             restitution:0.5,
                             position:{x:0,y:5,z:-3},
                             rotation:{x:1,y:0,z:0,w:1},
-                            impulse:{x:0,y:0,z:30}
+                            //impulse:{x:0,y:0,z:30}
                         },
                         {
                             _id:'box1', //kinda jank

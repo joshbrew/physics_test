@@ -16,6 +16,7 @@ export type PhysicsEntityProps = {
     restitution?:number,
     _id?:string,
 
-    impulse?:{x:number,y:number,z:number} //initial impulse
-    force?:{x:number,y:number,z:number} //initial impulse
+    impulse?:{x:number,y:number,z:number}, //initial impulse
+    force?:{x:number,y:number,z:number}, //initial impulse
+    acceleration?:{x:number,y:number,z:number} //will be calculated as a force based on mass
 }

@@ -97,6 +97,16 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 if(settings.force) {
                     rigidbody.addForce(settings.force,false);
                 }
+                if(settings.acceleration) {
+                    let mass = rigidbody.mass();
+                    rigidbody.applyImpulse(
+                        {
+                            x:settings.acceleration.x*mass,
+                            y:settings.acceleration.y*mass,
+                            z:settings.acceleration.z*mass
+                        }, true
+                    )
+                }
 
                 if(!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random()*1000000000000000)}`;
 
@@ -134,7 +144,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     }
                     if(settings.mass) {
                         entity.collider(0).setMass(settings.mass);
-                    } 
+                    } else entity.collider(0).setMass(1);
                     if(settings.centerOfMass) {
                         entity.collider(0).setMassProperties(
                             settings.mass as number,
@@ -148,6 +158,16 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     }
                     if(settings.force) {
                         entity.addForce(settings.force,true);
+                    }
+                    if(settings.acceleration) {
+                        let mass = entity.mass();
+                        entity.applyImpulse(
+                            {
+                                x:settings.acceleration.x*mass,
+                                y:settings.acceleration.y*mass,
+                                z:settings.acceleration.z*mass
+                            }, true
+                        )
                     }
                 }
             },

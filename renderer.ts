@@ -1,12 +1,13 @@
 
 //import * as B from 'babylonjs'
 //import * as THREE from 'three'
-import { GraphNode, WorkerInfo } from 'graphscript';
 import { 
     WorkerCanvasControls, 
     WorkerService, 
-    Loader
-} from 'graphscript' //'../graphscript/index'//
+    Loader,
+    GraphNode, 
+    WorkerInfo
+} from '../graphscript/index'//'graphscript'
 
 import {PhysicsEntityProps} from './workers/types'
 
@@ -52,6 +53,7 @@ export async function createRenderer(
             context:undefined,
             _id:elm.id,
             entities,
+            portId
         },
         'receiveBabylonCanvas'
     ) as WorkerCanvasControls;
