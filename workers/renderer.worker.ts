@@ -28,7 +28,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         const scene = new BABYLON.Scene(engine);
                         const camera = new BABYLON.FreeCamera(
                             'cam1', 
-                            new BABYLON.Vector3(-30,5,0), 
+                            new BABYLON.Vector3(-20,10,0), 
                             scene
                         );
                        
@@ -118,6 +118,14 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                                         (navMeshData) => {
                                             console.log("got worker data", navMeshData);
                                             if(isTypedArray(navMeshData)) nav.buildFromNavmeshData(navMeshData);
+
+                                            var navmeshdebug = nav.createDebugNavMesh(scene);
+                                            navmeshdebug.position = new BABYLON.Vector3(0, 0.01, 0);
+
+                                            var matdebug = new BABYLON.StandardMaterial('matdebug', scene);
+                                            matdebug.diffuseColor = new BABYLON.Color3(0.1, 0.2, 1);
+                                            matdebug.alpha = 0.2;
+                                            navmeshdebug.material = matdebug;
                                         }
                                     );
                                    
