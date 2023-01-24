@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "tinybuild",
+    "start": "tinybuild path=navwkr.tinybuild.config.js && tinybuild",
     "build": "tinybuild build",
     "serve": "tinybuild serve",
     "init": "node tinybuild/init.js",
@@ -28,6 +28,7 @@
     "babylonjs": "^5.43.0",
     "graphscript": "^0.2.56",
     "keyboardjs": "^2.7.0",
+    "recast-detour": "^1.6.2",
     "three": "^0.148.0"
   },
   "nodemonConfig": {

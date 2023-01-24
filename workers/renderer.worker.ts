@@ -2,8 +2,10 @@ import { WorkerService, workerCanvasRoutes, remoteGraphRoutes, CanvasProps, Work
 import * as BABYLON from 'babylonjs'
 import { PhysicsEntityProps } from './types';
 
-declare var WorkerGlobalScope
+import Recast from  "recast-detour"
+import { isTypedArray } from 'graphscript';
 
+declare var WorkerGlobalScope
 
 if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
 
@@ -29,13 +31,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                             new BABYLON.Vector3(-30,5,0), 
                             scene
                         );
-                        
-                        try{
-                            //const nav = new BABYLON.RecastJSPlugin(); //https://playground.babylonjs.com/#TN7KNN#2
-                            //nav.setWorkerURL('./workers/navmesh.worker.js');
-                        } catch(er) {
-                            console.error(er);
-                        }
+                       
         
                         camera.attachControl(canvas,false);
                         camera.setTarget(new BABYLON.Vector3(0,0,0));
@@ -44,6 +40,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         canvas.addEventListener('resize', () => { 
                             engine.setSize(canvas.clientWidth,canvas.clientHeight); //manual resize
                         });
+
                         setTimeout(() => { engine.setSize(canvas.clientWidth,canvas.clientHeight);  });
         
                         const light = new BABYLON.SpotLight(
@@ -56,7 +53,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         )
                         const shadowGenerator = new BABYLON.ShadowGenerator(1024,light);
 
-                        let entityNames;
+                        let entityNames = [] as any;
         
                         self.engine = engine;
                         self.scene = scene;
@@ -64,12 +61,78 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         self.shadowGenerator = shadowGenerator;
 
                         if(self.entities) {
-                            entityNames = self.entities.map((e) => {
-                                let entity = self.graph.run('loadBabylonEntity', self, scene, e); 
-                                return e._id; 
-                            })
+                            let meshes = self.entities.map((e,i) => {
+                                let mesh = self.graph.run('loadBabylonEntity', self, scene, e); 
+                                entityNames[i] = e._id;
+                                return mesh;
+                            }) as BABYLON.Mesh[];
+
+                            try{
+                                const initRecast = async () => {
+                                    const nav = new BABYLON.RecastJSPlugin(await Recast()); //https://playground.babylonjs.com/#TN7KNN#2
+                                    (globalThis as any).window = {
+                                        Worker,
+                                        addEventListener
+                                    }; //another hack
+    
+
+                                    var navMeshParameters = {
+                                        cs: 0.2,
+                                        ch: 0.2,
+                                        walkableSlopeAngle: 75,
+                                        walkableHeight: 100.0,
+                                        walkableClimb: 1,
+                                        walkableRadius: 1,
+                                        maxEdgeLen: 12.,
+                                        maxSimplificationError: 1.3,
+                                        minRegionArea: 8,
+                                        mergeRegionArea: 20,
+                                        maxVertsPerPoly: 6,
+                                        detailSampleDist: 6,
+                                        detailSampleMaxError: 1,
+                                    } as BABYLON.INavMeshParameters;
+                                
+                                    let filtered = meshes.filter((m,i) => {
+                                        if(entityNames[i] === 'ground') return true;
+                                    });
+
+                                    let merged = BABYLON.Mesh.MergeMeshes(filtered, false);
+
+                                    if(merged) merged.visibility = 0;
+
+                                    console.log('merged???', merged);
+                                    let worker = new Worker(`${location.origin}/dist/navmeshwkr.js`);
+                                    // worker.addEventListener('onmessage', (msg) => {
+                                    //     console.log('message', msg);
+                                    // });
+                                    //@ts-ignore
+                                    //nav._worker.postMessage('test'); //test
+
+                                    //nav.setWorkerURL(`${location.origin}/dist/navmesh.worker.js`);
+                                    //@ts-ignore
+                                    nav._worker = worker;
+
+                                    nav.createNavMesh(
+                                        [merged as any], 
+                                        navMeshParameters, 
+                                        (navMeshData) => {
+                                            console.log("got worker data", navMeshData);
+                                            if(isTypedArray(navMeshData)) nav.buildFromNavmeshData(navMeshData);
+                                        }
+                                    );
+                                   
+                                    // console.log(worker);
+    
+                                    console.log(nav);
+                                }
+                                initRecast();
+                                //
+                            } catch(er) {
+                                console.error(er);
+                            }
                         }
-        
+         
+                        
                         return entityNames;
                     },
                     
