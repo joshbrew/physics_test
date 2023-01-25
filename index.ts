@@ -96,7 +96,7 @@ let graph = new WorkerService({
                             dynamic:false,
                             restitution:1,
                             position:{x:0,y:0,z:0},
-                            navMesh:'test'
+                            navMesh:true
                         },
                         {
                             _id:'leftwall',
@@ -117,10 +117,11 @@ let graph = new WorkerService({
                         {
                             _id:'ground2',
                             collisionType:'cuboid',
-                            dimensions:{width:10000,height:1,depth:10000},
+                            dimensions:{width:100,height:1,depth:100},
                             dynamic:false,
                             restitution:1,
-                            position:{x:0,y:-10,z:0}
+                            position:{x:0,y:-10,z:0},
+                            navMesh:true
                         },
                     ]
                 );

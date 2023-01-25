@@ -847,7 +847,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
 
                 let agentUpdates = {};
                 entities.forEach((e,i) => {
-                    let agentVelocity = crowd.getAgentVelocity(0);
+                    let agentVelocity = crowd.getAgentVelocity(i);
 
                     let _fps = 1/fps;
                     let acceleration = {
@@ -856,11 +856,11 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         z:agentVelocity.z*_fps*2
                     };
 
-                    if(needsUpdate) { //provides a stronger direction change impulse
-                        acceleration.x += agentVelocity.x*10;
-                        acceleration.y += agentVelocity.y*10;
-                        acceleration.z += agentVelocity.z*10;
-                    }
+                    // if(needsUpdate) { //provides a stronger direction change impulse
+                    //     acceleration.x += agentVelocity.x*10;
+                    //     acceleration.y += agentVelocity.y*10;
+                    //     acceleration.z += agentVelocity.z*10;
+                    // }
     
                     agentUpdates[e.id] = {acceleration};
                 })

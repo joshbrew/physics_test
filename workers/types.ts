@@ -21,7 +21,7 @@ export type PhysicsEntityProps = {
 
     crowd?:string, //join a crowd for navigation? Need to tell the thread what meshes to merge to create nav meshes. Crowd will update to physics thread with accelerations
     targetOf?:string //is this a target of a crowd?
-    navMesh?:string //navMesh group to lump the entity into?
+    navMesh?:boolean //navMesh group to lump the entity into?
 
     impulse?:Vec3, //initial impulse
     force?:Vec3, //initial impulse

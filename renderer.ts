@@ -79,7 +79,7 @@ export async function createRenderer(
     });
 
     let crowds = {};
-    let navMeshes = {};
+    let navMeshes = [] as string[];
     let targets = {};
 
     entities?.forEach((o) => {
@@ -88,24 +88,21 @@ export async function createRenderer(
             crowds[o.crowd].push(o._id);
         }
         if(o.navMesh) {
-            if(!navMeshes[o.navMesh]) navMeshes[o.navMesh] = [];
-            navMeshes[o.navMesh].push(o._id);
+            navMeshes.push(o._id);
         }
         if(o.targetOf) targets[o.targetOf] = o._id;
     })
 
-    for(const key in navMeshes) {
-        let meshId = await navigation.run(
-            'createNavMesh', 
-            [
-                navMeshes[key],
-                undefined,
-                true,
-                navPort
-            ]
-        );
-    }
-
+    let meshId = await navigation.run(
+        'createNavMesh', 
+        [
+            navMeshes,
+            undefined,
+            true,
+            navPort
+        ]
+    );
+    
     for(const key in crowds) {
         let crowdId = await navigation.run(
             'createCrowd', 
