@@ -88,7 +88,7 @@ export async function createRenderer(
             navMeshes,
             undefined,
             true,
-            navPort
+            navPort //send the resulting mesh to main thread to render
         ]
     );
     
