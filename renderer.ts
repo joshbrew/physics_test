@@ -9,7 +9,7 @@ import {
     WorkerInfo
 } from 'graphscript'//'../graphscript/index'//'graphscript'
 
-import {PhysicsEntityProps} from './workers/types'
+import {PhysicsEntityProps} from './src/types'
 
 // import keyboard from 'keyboardjs'
 
