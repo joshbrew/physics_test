@@ -111,8 +111,7 @@ export async function createRenderer(
             'createCrowd', 
             [
                 crowds[key], 
-                targets[key], 
-                navPhysicsPort
+                targets[key]
             ]
         );
     }
@@ -124,11 +123,17 @@ export async function createRenderer(
         { x: 0.0, y: -9.81, z:0 }
     ]).then(() => {
 
+        physics.post('subscribeToWorker', [
+            'animateCrowd',
+            navPhysicsPort,
+            'updatePhysicsEntities'
+        ])
+
         navigation.post('subscribeToWorker',[
             'stepWorld',
             navPhysicsPort,
             'updateEntities'
-        ])
+        ]);
 
         renderer.post('subscribeToWorker',[
             'stepWorld',

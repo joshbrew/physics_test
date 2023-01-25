@@ -719,7 +719,6 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
             createCrowd:async function (
                 entities:BABYLON.Mesh[]|string[],
                 initialTarget?:BABYLON.Mesh|string,
-                physicsPort?:string,
                 params?:Partial<BABYLON.IAgentParameters>,
                 ctx?:string|WorkerCanvas
             ) {
@@ -789,9 +788,9 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     );
                     tick++;
                     //console.log(updates);
-                    if(physicsPort) {
-                        this.__node.graph.workers[physicsPort]?.run('updatePhysicsEntities', updates);
-                    }
+                    // if(physicsPort) {
+                    //     this.__node.graph.workers[physicsPort]?.run('updatePhysicsEntities', updates);
+                    // }
                     
                     if((ctx as WorkerCanvas).crowds[crowdId].animating)
                         requestAnimationFrame(obsv);
