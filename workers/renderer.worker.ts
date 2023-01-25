@@ -812,10 +812,9 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
 
                 if(typeof ctx !== 'object') return undefined;
 
-                const nav = ctx.nav as BABYLON.RecastJSPlugin;
-                const engine = ctx.engine as BABYLON.Engine;
+                // const nav = ctx.nav as BABYLON.RecastJSPlugin;
+                // const engine = ctx.engine as BABYLON.Engine;
                 const scene = ctx.scene as BABYLON.Scene;
-
 
                 let mesh = scene.getMeshByName(id)
                 if(mesh) scene.removeMesh(mesh);
@@ -830,7 +829,9 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 target?:BABYLON.Mesh,
             ) {
 
-                if(tick % fps === 0) {
+                let needsUpdate = tick % Math.floor(fps*.3) === 0;
+
+                if(needsUpdate) {
                     
                     entities.forEach((e,i) => { //update the crowd positions based on the physics engine's updates to the meshes
                         crowd.agentTeleport(i, e.position);
@@ -855,6 +856,12 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         y:agentVelocity.y*_fps*2,
                         z:agentVelocity.z*_fps*2
                     };
+
+                    if(needsUpdate) { //provides a stronger direction change impulse
+                        acceleration.x += agentVelocity.x*10;
+                        acceleration.y += agentVelocity.y*10;
+                        acceleration.z += agentVelocity.z*10;
+                    }
     
                     agentUpdates[e.id] = {acceleration};
                 })
