@@ -1,4 +1,12 @@
-import { WorkerService, workerCanvasRoutes, remoteGraphRoutes, CanvasProps, WorkerCanvas, isTypedArray } from '../../graphscript/index'//'graphscript'
+import { 
+    WorkerService, 
+    workerCanvasRoutes, 
+    remoteGraphRoutes, 
+    CanvasProps, 
+    WorkerCanvas, 
+    isTypedArray, 
+    WorkerInfo
+} from 'graphscript'//'../../graphscript/index'//'graphscript'
 import * as BABYLON from 'babylonjs'
 import { PhysicsEntityProps } from './types';
 
@@ -12,7 +20,9 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
         roots:{
             ...workerCanvasRoutes,
             ...remoteGraphRoutes,
-            receiveBabylonCanvas:function(options:CanvasProps) {
+            receiveBabylonCanvas:function(
+                options:CanvasProps
+            ) {
 
                 const BabylonCanvasProps = {
                     BABYLON,
@@ -26,12 +36,19 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         const engine = new BABYLON.Engine(canvas);
                         const scene = new BABYLON.Scene(engine);
 
+                        self.engine = engine;
+                        self.scene = scene;
+
+                        self.camera = this.__node.graph.run('attachFreeCamera', 0.5, self);
+
                         canvas.addEventListener('resize', () => { 
                             engine.setSize(canvas.clientWidth,canvas.clientHeight); //manual resize
                         });
 
-                        setTimeout(() => { engine.setSize(canvas.clientWidth,canvas.clientHeight);  });
+                        setTimeout(() => { engine.setSize(canvas.clientWidth,canvas.clientHeight);  }, 100);
         
+
+
                         const light = new BABYLON.SpotLight(
                             'light1', 
                             new BABYLON.Vector3(0,30,0),
@@ -41,164 +58,156 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                             scene
                         )
                         const shadowGenerator = new BABYLON.ShadowGenerator(1024,light);
-
-                        let entityNames = [] as any;
-        
-                       
-        
-                        self.engine = engine;
-                        self.scene = scene;
-
-                        self.camera = this.__node.graph.run('attachCamera', scene, canvas);
-
                         self.shadowGenerator = shadowGenerator;
 
-                        if(self.entities) {
+
+                        
+                        let entityNames = [] as any;
+        
+                        if(self.entities) { //settings passed from main thread as PhysicsEntityProps[]
                             let meshes = self.entities.map((e,i) => {
-                                let mesh = self.graph.run('loadBabylonEntity', self, scene, e); 
+                                let mesh = scene.getMeshById(this.__node.graph.run('loadBabylonEntity', e, self)); 
                                 entityNames[i] = e._id;
                                 return mesh;
                             }) as BABYLON.Mesh[];
 
-                            try{
-                                const initRecast = async () => {
-                                    const nav = new BABYLON.RecastJSPlugin(await Recast()); //https://playground.babylonjs.com/#TN7KNN#2
-                                    (globalThis as any).window = {
-                                        Worker,
-                                        addEventListener
-                                    }; //another hack
+                            // try{
+                            //     const initRecast = async () => {
+                            //         const nav = new BABYLON.RecastJSPlugin(await Recast()); //https://playground.babylonjs.com/#TN7KNN#2
+                            //         (globalThis as any).window = {
+                            //             Worker,
+                            //             addEventListener
+                            //         }; //another hack
     
 
-                                    var navMeshParameters = {
-                                        cs: 0.2,
-                                        ch: 0.2,
-                                        walkableSlopeAngle: 90,
-                                        walkableHeight: 10.0,
-                                        walkableClimb: 3,
-                                        walkableRadius: 1,
-                                        maxEdgeLen: 12.,
-                                        maxSimplificationError: 1.3,
-                                        minRegionArea: 8,
-                                        mergeRegionArea: 20,
-                                        maxVertsPerPoly: 6,
-                                        detailSampleDist: 6,
-                                        detailSampleMaxError: 1,
-                                    } as BABYLON.INavMeshParameters;
+                            //         var navMeshParameters = {
+                            //             cs: 0.2,
+                            //             ch: 0.2,
+                            //             walkableSlopeAngle: 90,
+                            //             walkableHeight: 10.0,
+                            //             walkableClimb: 5,
+                            //             walkableRadius: 1,
+                            //             maxEdgeLen: 12.,
+                            //             maxSimplificationError: 1.3,
+                            //             minRegionArea: 8,
+                            //             mergeRegionArea: 20,
+                            //             maxVertsPerPoly: 6,
+                            //             detailSampleDist: 6,
+                            //             detailSampleMaxError: 1,
+                            //         } as BABYLON.INavMeshParameters;
                                 
-                                    let filtered = meshes.filter((m,i) => {
-                                        if(m.id === 'ground') return true;
-                                    });
+                            //         let filtered = meshes.filter((m,i) => {
+                            //             if(m.id === 'ground') return true;
+                            //         });
 
-                                    let merged = BABYLON.Mesh.MergeMeshes(filtered, false);
+                            //         let merged = BABYLON.Mesh.MergeMeshes(filtered, false);
 
-                                    if(merged) merged.visibility = 0;
+                            //         if(merged) merged.visibility = 0;
 
-                                    let worker = new Worker(`${location.origin}/dist/navmeshwkr.js`);
-                                    // worker.addEventListener('onmessage', (msg) => {
-                                    //     console.log('message', msg);
-                                    // });
-                                    //@ts-ignore
-                                    //nav._worker.postMessage('test'); //test
+                            //         let worker = new Worker(`${location.origin}/dist/navmeshwkr.js`);
+                            //         // worker.addEventListener('onmessage', (msg) => {
+                            //         //     console.log('message', msg);
+                            //         // });
+                            //         //@ts-ignore
+                            //         //nav._worker.postMessage('test'); //test
 
-                                    //nav.setWorkerURL(`${location.origin}/dist/navmesh.worker.js`);
-                                    //@ts-ignore
-                                    nav._worker = worker;
+                            //         //nav.setWorkerURL(`${location.origin}/dist/navmesh.worker.js`);
+                            //         //@ts-ignore
+                            //         nav._worker = worker;
 
-                                    const withNavMesh = (navMeshData) => {
-                                        console.log("got worker data", navMeshData);
-                                        if(isTypedArray(navMeshData)) nav.buildFromNavmeshData(navMeshData);
+                            //         const withNavMesh = (navMeshData) => {
+                            //             console.log("got worker data", navMeshData);
+                            //             if(isTypedArray(navMeshData)) nav.buildFromNavmeshData(navMeshData);
 
-                                        let navmeshdebug = nav.createDebugNavMesh(scene);
-                                        navmeshdebug.position = new BABYLON.Vector3(0, 0.01, 0);
-                                        nav.setTimeStep(1/60);
+                            //             let navmeshdebug = nav.createDebugNavMesh(scene);
+                            //             navmeshdebug.position = new BABYLON.Vector3(0, 0.01, 0);
+                            //             nav.setTimeStep(1/60);
 
-                                        let matdebug = new BABYLON.StandardMaterial('matdebug', scene);
-                                        matdebug.diffuseColor = new BABYLON.Color3(0.1, 0.2, 1);
-                                        matdebug.alpha = 0.2;
-                                        navmeshdebug.material = matdebug;
+                            //             let matdebug = new BABYLON.StandardMaterial('matdebug', scene);
+                            //             matdebug.diffuseColor = new BABYLON.Color3(0.1, 0.2, 1);
+                            //             matdebug.alpha = 0.2;
+                            //             navmeshdebug.material = matdebug;
 
-                                        let crowd = nav.createCrowd(10, 0.1, scene);
+                            //             let crowd = nav.createCrowd(10, 0.1, scene);
 
-                                        let agentParams = {
-                                            radius: 0.1,
-                                            height: 0.2,
-                                            maxAcceleration: 4.0,
-                                            maxSpeed: 1.0,
-                                            collisionQueryRange: 0.5,
-                                            pathOptimizationRange: 0.1,
-                                            separationWeight: 1.0
-                                        } as BABYLON.IAgentParameters;
+                            //             let agentParams = {
+                            //                 radius: 0.1,
+                            //                 height: 0.2,
+                            //                 maxAcceleration: 4.0,
+                            //                 maxSpeed: 1.0,
+                            //                 collisionQueryRange: 0.5,
+                            //                 pathOptimizationRange: 0.1,
+                            //                 separationWeight: 1.0
+                            //             } as BABYLON.IAgentParameters;
 
-                                        let entity = meshes.find((o,i) => { if(o.id === 'ball') return true;  }) as BABYLON.Mesh;
-                                        let transform = new BABYLON.TransformNode('ballt',scene);
+                            //             let entity = meshes.find((o,i) => { if(o.id === 'ball') return true;  }) as BABYLON.Mesh;
+                            //             let transform = new BABYLON.TransformNode('ballt',scene);
 
-                                        crowd.addAgent(nav.getClosestPoint(entity.position), agentParams, transform);
+                            //             crowd.addAgent(nav.getClosestPoint(entity.position), agentParams, transform);
 
-                                        let target = meshes.find((o,i) => { if(o.id.includes('capsule')) return true; }) as BABYLON.Mesh;
-                                        let point = nav.getClosestPoint(target.position);
+                            //             let target = meshes.find((o,i) => { if(o.id.includes('capsule')) return true; }) as BABYLON.Mesh;
+                            //             let point = nav.getClosestPoint(target.position);
                                         
-                                        // let pathPoints = nav.computePath(crowd.getAgentPosition(0), point);
-                                        // let pathLine = BABYLON.MeshBuilder.CreateDashedLines("ribbon", {points: pathPoints, updatable: true}, scene);
+                            //             // let pathPoints = nav.computePath(crowd.getAgentPosition(0), point);
+                            //             // let pathLine = BABYLON.MeshBuilder.CreateDashedLines("ribbon", {points: pathPoints, updatable: true}, scene);
 
-                                        crowd.agentGoto(0, point);
-                                            
+                            //             crowd.agentGoto(0, point);
 
-                                        console.log(crowd);
+                            //             console.log(crowd);
 
-                                        let tick = 0;
-                                        scene.onBeforeRenderObservable.add(() => {
-                                            tick++;
+                            //             let tick = 0;
+                            //             scene.onBeforeRenderObservable.add(() => {
+                            //                 tick++;
 
-                                            if(tick % 10 === 0) {
-                                                let point = nav.getClosestPoint(target.position);
+                            //                 let fps = engine.getFps();
+                            //                 if(tick % fps === 0) {
+                            //                     let point = nav.getClosestPoint(target.position);
                                                 
-                                                crowd.agentTeleport(0, entity.position);
-                                                crowd.agentGoto(0, point);
+                            //                     crowd.agentTeleport(0, entity.position);
+                            //                     crowd.agentGoto(0, point);
                                             
-                                            }
-                                            let fps = engine.getFps();
-                                            crowd.update(1/fps);
-                                            let agentVelocity = crowd.getAgentVelocity(0);
+                            //                 }
+                            //                 crowd.update(1/fps);
+                            //                 let agentVelocity = crowd.getAgentVelocity(0);
 
 
-                                            let agentUpdates = {};
+                            //                 let agentUpdates = {};
 
-                                            let _fps = 1/fps;
-                                            let acceleration = {
-                                                x:agentVelocity.x*_fps*2, 
-                                                y:agentVelocity.y*_fps*2,
-                                                z:agentVelocity.z*_fps*2
-                                            };
+                            //                 let _fps = 1/fps;
+                            //                 let acceleration = {
+                            //                     x:agentVelocity.x*_fps, 
+                            //                     y:agentVelocity.y*_fps,
+                            //                     z:agentVelocity.z*_fps
+                            //                 };
 
-                                            agentUpdates[entity.id] = {acceleration};
+                            //                 agentUpdates[entity.id] = {acceleration};
 
-                                            graph.workers[self.portId]?.run('updatePhysicsEntity', [entity.id,agentUpdates[entity.id]]);
+                            //                 this.__node.graph.workers[self.physicsPort]?.run('updatePhysicsEntity', [entity.id,agentUpdates[entity.id]]);
                                             
-                                            // entity.position.x = agentPosition.x;
-                                            // entity.position.y = agentPosition.y + 1;
-                                            // entity.position.z = agentPosition.z; 
-                                            //console.log(agentPosition);
-                                        })
-                                    }
+                            //                 // entity.position.x = agentPosition.x;
+                            //                 // entity.position.y = agentPosition.y + 1;
+                            //                 // entity.position.z = agentPosition.z; 
+                            //                 //console.log(agentPosition);
+                            //             })
+                            //         }
 
-                                    nav.createNavMesh(
-                                        [merged as any], 
-                                        navMeshParameters, 
-                                        withNavMesh
-                                    );
+                            //         nav.createNavMesh(
+                            //             [merged as any], 
+                            //             navMeshParameters, 
+                            //             withNavMesh
+                            //         );
                                    
-                                    // console.log(worker);
+                            //         // console.log(worker);
     
-                                    console.log(nav);
-                                }
-                                initRecast();
-                                //
-                            } catch(er) {
-                                console.error(er);
-                            }
+                            //         console.log(nav);
+                            //     }
+                            //     initRecast();
+                            //     //
+                            // } catch(er) {
+                            //     console.error(er);
+                            // }
                         }
-         
-                        
+
                         return entityNames;
                     },
                     draw:function (self:WorkerCanvas,canvas,context) {
@@ -209,27 +218,9 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         data:{[key:string]:{ 
                             position:{x:number,y:number,z:number}, 
                             rotation:{x:number,y:number,z:number,w:number} 
-                        }}) {
-
-                        let idx = 0;
-                        for(const key in data) {
-                            //if(idx === 0) { idx++; continue; }
-                            let mesh = (self.scene as BABYLON.Scene).getMeshByName(key);
-                            //console.log(JSON.stringify(mesh?.rotation),JSON.stringify(data[key].rotation))
-                            if(mesh) {
-                                mesh.position.x = data[key].position.x;
-                                mesh.position.y = data[key].position.y;
-                                mesh.position.z = data[key].position.z;
-
-                                if(mesh.rotationQuaternion) {
-                                    mesh.rotationQuaternion._x = data[key].rotation.x
-                                    mesh.rotationQuaternion._y = data[key].rotation.y
-                                    mesh.rotationQuaternion._z = data[key].rotation.z
-                                    mesh.rotationQuaternion._w = data[key].rotation.w
-                                }
-                            }
-                            idx++;
-                        }
+                        }}|number[]
+                    ) {
+                        this.__node.graph.run('updateEntities', data);
 
                     },
                     clear:function (self:WorkerCanvas, canvas, context) {
@@ -246,10 +237,53 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
 
                 return renderId;
             },
-            attachCamera:function (
-                scene:BABYLON.Scene, 
-                canvas:OffscreenCanvas
+            initEngine:function ( //run this on the secondary thread
+                ctx?:string|WorkerCanvas|{[key:string]:any}
+            ){
+                if(!ctx || typeof ctx === 'string')
+                    ctx = this.__node.graph.run('getCanvas',ctx);
+
+                if(typeof ctx !== 'object') ctx = {};
+                
+                const canvas = ctx.canvas ? ctx.canvas : new OffscreenCanvas(100,100);
+                const engine = new BABYLON.Engine(canvas);
+                const scene = new BABYLON.Scene(engine);
+
+
+                ctx.canvas = canvas;
+                ctx.engine = engine;
+                ctx.scene = scene;
+
+                //duplicating for secondary engine threads (in our case for running a standalone navmesh/crowd animation thread) 
+                if(!ctx._id) ctx._id = `canvas${Math.floor(Math.random()*1000000000000000)}`;
+                
+                if(!this.__node.graph.CANVASES) 
+                    this.__node.graph.CANVASES = {} as { [key:string]:WorkerCanvas };
+                if(!this.__node.graph.CANVASES[ctx._id]) 
+                    this.__node.graph.CANVASES[ctx._id] = ctx;
+
+                if(ctx.entities) {
+                    let names = ctx.entities.map((e,i) => {
+                        return this.__node.graph.run('loadBabylonEntity', e, self);
+                    });
+
+                    return names;
+                }
+
+            },
+            attachFreeCamera:function (
+                speed=0.5,
+                ctx?:string|WorkerCanvas
             ) {
+
+                if(!ctx || typeof ctx === 'string')
+                    ctx = this.__node.graph.run('getCanvas',ctx);
+
+                if(typeof ctx !== 'object') return undefined;
+
+                const scene = ctx.scene as BABYLON.Scene;
+                const canvas = ctx.canvas as OffscreenCanvas;
+
                 const camera = new BABYLON.FreeCamera(
                     'camera', 
                     new BABYLON.Vector3(-20,10,0), 
@@ -260,7 +294,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
 
                 camera.setTarget(new BABYLON.Vector3(0,0,0));
 
-                camera.speed = 0.5;
+                camera.speed = speed;
 
                 let w = () => {
                     camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Forward().scale(camera.speed)))
@@ -274,10 +308,16 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 let d = () => {
                     camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Right().scale(camera.speed)))
                 }
+                let ctrl = () => {
+                    camera.position.addInPlace(BABYLON.Vector3.Down().scale(camera.speed))
+                }
+                let space = () => {
+                    camera.position.addInPlace(BABYLON.Vector3.Up().scale(camera.speed))
+                }
                 
-                let wobserver, aobserver, sobserver, dobserver;
+                let wobserver, aobserver, sobserver, dobserver, ctrlobserver, spaceobserver;
                 //need to set custom controls
-                canvas.addEventListener('keydown', (ev:any) => {
+                canvas.addEventListener('keydown', (ev:any) => { //these key events are proxied from main thread
                     if(ev.keyCode === 87 || ev.keycode === 38) {
                         if(!wobserver) wobserver = scene.onBeforeRenderObservable.add(w);
                     }
@@ -289,6 +329,12 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     }
                     if(ev.keyCode === 68 || ev.keycode === 39) {
                         if(!dobserver) dobserver = scene.onBeforeRenderObservable.add(d);
+                    }
+                    if(ev.keyCode === 17) {
+                        if(!ctrlobserver) ctrlobserver = scene.onBeforeRenderObservable.add(ctrl);
+                    }
+                    if(ev.keyCode === 32) {
+                        if(!spaceobserver) spaceobserver = scene.onBeforeRenderObservable.add(space);
                     }
                     //console.log(ev);
                 });
@@ -319,6 +365,18 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                             dobserver = null;
                         }
                     }
+                    if(ev.keyCode === 17) {
+                        if(ctrlobserver) {
+                            scene.onBeforeRenderObservable.remove(ctrlobserver);
+                            ctrlobserver = null;
+                        }
+                    }
+                    if(ev.keyCode === 32) {
+                        if(spaceobserver) {
+                            scene.onBeforeRenderObservable.remove(spaceobserver);
+                            spaceobserver = null;
+                        }
+                    }
                     //console.log(ev);
                 });
                 
@@ -344,10 +402,19 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     //console.log(ev);
                 });
 
-                
                 return camera;
             },
-            loadBabylonEntity:(self,scene:BABYLON.Scene, settings:PhysicsEntityProps) => {
+            loadBabylonEntity:function (
+                settings:PhysicsEntityProps,
+                ctx?:string|WorkerCanvas
+            ) {
+                if(!ctx || typeof ctx === 'string')
+                    ctx = this.__node.graph.run('getCanvas',ctx);
+
+                if(typeof ctx !== 'object') return undefined;
+
+                const scene = ctx.scene as BABYLON.Scene;
+
                 let entity: BABYLON.Mesh | undefined;
                 //limited settings rn for simplicity to work with the physics engine
                 if(settings.collisionType === 'ball') {
@@ -409,17 +476,75 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 
                     entity.receiveShadows = true;
 
-                    if(self.shadowGenerator) {
-                        (self.shadowGenerator as BABYLON.ShadowGenerator).addShadowCaster(entity);
+                    if(ctx.shadowGenerator) {
+                        (ctx.shadowGenerator as BABYLON.ShadowGenerator).addShadowCaster(entity);
                     }
                 
                 }
-
-
-
-                return entity;
+                
+                return settings._id;
             },
-            createNavMesh: async (data) => {
+            updateEntities:function(
+                data:{[key:string]:{ 
+                    position:{x:number,y:number,z:number}, 
+                    rotation:{x:number,y:number,z:number,w:number} 
+                }}|number[],
+                ctx?:WorkerCanvas|string 
+            ) {
+
+                if(!ctx || typeof ctx === 'string')
+                    ctx = this.__node.graph.run('getCanvas',ctx);
+
+                if(typeof ctx !== 'object') return undefined;
+
+                const scene = ctx.scene as BABYLON.Scene;
+
+                if(Array.isArray(data)) { //array buffer
+                    let idx = 0;
+                    let offset = 7;
+                    
+                    const entities = ctx.entities as PhysicsEntityProps[];
+
+                    entities.forEach((e,i) => { //array
+                        let mesh = scene.getMeshByName(e._id as string) as BABYLON.Mesh;
+                        if(mesh) {
+                            let j = i*offset;
+
+                            mesh.position.x = data[j];
+                            mesh.position.y = data[j+1];
+                            mesh.position.z = data[j+2];
+
+                            if(mesh.rotationQuaternion) {
+                                mesh.rotationQuaternion._x = data[j+3];
+                                mesh.rotationQuaternion._y = data[j+4];
+                                mesh.rotationQuaternion._z = data[j+5];
+                                mesh.rotationQuaternion._w = data[j+6];
+                            }
+                        }
+                        idx++;
+                    })
+                }
+                else if(typeof data === 'object') { //key-value pairs
+                    for(const key in data) {
+                        //if(idx === 0) { idx++; continue; }
+                        let mesh = scene.getMeshByName(key);
+                        //console.log(JSON.stringify(mesh?.rotation),JSON.stringify(data[key].rotation))
+                        if(mesh) {
+                            mesh.position.x = data[key].position.x;
+                            mesh.position.y = data[key].position.y;
+                            mesh.position.z = data[key].position.z;
+
+                            if(mesh.rotationQuaternion) {
+                                mesh.rotationQuaternion._x = data[key].rotation.x
+                                mesh.rotationQuaternion._y = data[key].rotation.y
+                                mesh.rotationQuaternion._z = data[key].rotation.z
+                                mesh.rotationQuaternion._w = data[key].rotation.w
+                            }
+                        }
+                    }
+                }
+            },
+            createNavMeshData: async (data) => {
                 // get message datas
                 const recast = await Recast() as any;
                 const positions = data[0];
@@ -463,12 +588,30 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 return ret;//postMessage(ret);
                 //});
             },
-            createNavigationContext:async function(
-                nav:BABYLON.RecastJSPlugin, 
-                entities:BABYLON.Mesh[], 
-                params?:BABYLON.INavMeshParameters
+            createNavMesh:async function(
+                meshesToMerge:BABYLON.Mesh[]|string[], 
+                params?:BABYLON.INavMeshParameters,
+                debug?:boolean,
+                sendDebug?:string, //send the mesh to a port to render the debug?
+                useWorker?:string, //custom workerURL?
+                ctx?:string|WorkerCanvas
             ) {
-                let merged = BABYLON.Mesh.MergeMeshes(entities);
+
+
+                if(!ctx || typeof ctx === 'string')
+                    ctx = this.__node.graph.run('getCanvas',ctx);
+
+                if(typeof ctx !== 'object') return undefined;
+
+                if(!ctx.nav) ctx.nav = new BABYLON.RecastJSPlugin(await Recast()); 
+                const nav = ctx.nav as BABYLON.RecastJSPlugin;
+                const scene = ctx.scene as BABYLON.Scene;
+
+                if(typeof meshesToMerge[0] === 'string') {
+                    meshesToMerge = meshesToMerge.map((o) => { return scene.getMeshById(o); }) as BABYLON.Mesh[]; 
+                }
+
+                let merged = BABYLON.Mesh.MergeMeshes(meshesToMerge as BABYLON.Mesh[]);
                 
                 var navMeshParameters = {
                     cs: 0.2,
@@ -488,45 +631,124 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
 
                 if(params) Object.assign(navMeshParameters,params);
 
+                const navMeshId = `navmesh${Math.floor(Math.random()*1000000000000000)}`;
+
+                if(!ctx.navMeshes) ctx.navMeshes = {} as any;
+
+                
+                //@ts-ignore
+                if(!nav._worker) {
+                    // use a secondary worker to load the navMeshes
+                    const workerUrl = typeof useWorker === 'string' ? useWorker : `${location.origin}/dist/navmeshwkr.js`; //default 
+
+                    let worker = new Worker(workerUrl);
+                    //@ts-ignore
+                    nav._worker = worker;
+                }
+
+                // test the worker
+                // worker.addEventListener('onmessage', (msg) => {
+                //     console.log('message', msg);
+                // });
+                //@ts-ignore
+                //nav._worker.postMessage('test'); //test
+
+                //library call, didn't work for some reason...
+                //nav.setWorkerURL(`${location.origin}/dist/navmesh.worker.js`);
+
+
+                const withNavMesh = (navMeshData) => {
+                    (ctx as WorkerCanvas).navMeshes[navMeshId] = navMeshData;
+                    if(typeof navMeshData === 'string' && (ctx as WorkerCanvas).navMeshes) 
+                        navMeshData = (ctx as WorkerCanvas).navMeshes[navMeshData];
+                    if(typeof navMeshData !== 'object') return undefined;
+    
+                    if(isTypedArray(navMeshData)) nav.buildFromNavmeshData(navMeshData);
+
+                    //-------------------------
+                    //----------debug----------
+                    //-------------------------
+                    if(debug) {
+                        let debugNavMesh = nav.createDebugNavMesh(scene);
+                        if(sendDebug) {
+                            let data = debugNavMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+                            (this.__node.graph.workers[sendDebug] as WorkerInfo)?.run(
+                                'createDebugNavMesh', 
+                                [data]
+                            );
+                        } else {
+                            this.__node.graph.run('createDebugNavMesh', debugNavMesh);
+                        }
+                    }
+                    //-------------------------
+                    //-------------------------
+                    //-------------------------
+                    return navMeshId; //will live on ctx.navMeshes, returns Id so you can gain the reference on the main thread
+                }
+
                 return new Promise((res) => {
                     nav.createNavMesh(
                         [merged as any], 
                         navMeshParameters, 
-                        (navmeshData) => {
-                            res(navmeshData);
+                        (navMeshData) => {
+                            res(withNavMesh(navMeshData)); //will live on ctx.navMeshes, returns Id so you can gain the reference on the main thread
                         }
                     )
                 });
             },
+            createDebugNavMesh:function(data:Float32Array, ctx?:WorkerCanvas|string) {
+
+                if(!ctx || typeof ctx === 'string')
+                    ctx = this.__node.graph.run('getCanvas',ctx);
+
+                if(typeof ctx !== 'object') return undefined;
+
+                const scene = ctx.scene;
+
+
+                let navmeshdebug = new BABYLON.Mesh('navDebugMesh', scene);
+                navmeshdebug.setVerticesData(BABYLON.VertexBuffer.PositionKind, data);
+
+                navmeshdebug.position = new BABYLON.Vector3(0, 0.01, 0);
+                let matdebug = new BABYLON.StandardMaterial('matdebug', scene);
+                matdebug.diffuseColor = new BABYLON.Color3(0.1, 0.2, 1);
+                matdebug.alpha = 0.2;
+                navmeshdebug.material = matdebug;
+
+            },
             createCrowd:async function (
-                navMeshData:Uint8Array, 
-                nav:BABYLON.RecastJSPlugin, 
-                engine:BABYLON.Engine, 
-                scene:BABYLON.Scene, 
-                entities:BABYLON.Mesh[],
-                target:BABYLON.Mesh,
+                entities:BABYLON.Mesh[]|string[],
+                initialTarget?:BABYLON.Mesh|string,
+                physicsPort?:string,
                 params?:Partial<BABYLON.IAgentParameters>,
-                debug?:boolean
+                ctx?:string|WorkerCanvas
             ) {
+                if(!ctx || typeof ctx === 'string')
+                    ctx = this.__node.graph.run('getCanvas',ctx);
 
-                if(isTypedArray(navMeshData)) nav.buildFromNavmeshData(navMeshData);
+                if(typeof ctx !== 'object') return undefined;
 
-                //-------------------------
-                //----------debug----------
-                //-------------------------
-                if(debug) {
-                    let navmeshdebug = nav.createDebugNavMesh(scene);
-                    navmeshdebug.position = new BABYLON.Vector3(0, 0.01, 0);
-                    let matdebug = new BABYLON.StandardMaterial('matdebug', scene);
-                    matdebug.diffuseColor = new BABYLON.Color3(0.1, 0.2, 1);
-                    matdebug.alpha = 0.2;
-                    navmeshdebug.material = matdebug;
+                const nav = ctx.nav as BABYLON.RecastJSPlugin;
+                const engine = ctx.engine as BABYLON.Engine;
+                const scene = ctx.scene as BABYLON.Scene;
+
+                if(typeof entities[0] === 'string') {
+                    entities = entities.map((o) => { 
+                        return scene.getMeshById(o); 
+                    }) as BABYLON.Mesh[]; 
                 }
-                //-------------------------
-                //-------------------------
-                //-------------------------
+
+                if(typeof initialTarget === 'string') 
+                    initialTarget = scene.getMeshById(initialTarget) as BABYLON.Mesh;
 
                 let crowd = nav.createCrowd(entities.length, 0.1, scene);
+
+                let crowdId = `crowd${Math.floor(Math.random()*1000000000000000)}`;
+
+                if(!ctx.crowds) 
+                    ctx.crowds = {};
+                
+                ctx.crowds[crowdId] = {crowd, target:initialTarget, entities};
 
                 let agentParams = {
                     radius: 0.1,
@@ -540,40 +762,84 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
 
                 if(params) Object.assign(agentParams,params);
 
-
                 entities.forEach((entity) => {
-                    let transform = new BABYLON.TransformNode('t', scene);
+                    let transform = new BABYLON.TransformNode(`${entity.id}TransformNode`, scene);
                     crowd.addAgent(nav.getClosestPoint(entity.position), agentParams, transform);
                 })
 
-                if(target) {
-                    let point = nav.getClosestPoint(target.position);
-                    crowd.agentGoto(0, point);
-                    let tick = 0;
-                    scene.onBeforeRenderObservable.add(() => {
-                        this.__node.graph.run('animateCrowd',nav,crowd,entities,target,tick,engine.getFps());
+                if(initialTarget) {
+                    let point = nav.getClosestPoint(initialTarget.position);
+                    entities.forEach((e, i) => {
+                        crowd.agentGoto(i, point); 
                     });
                 }
 
-                return crowd;
+                let tick = 0;
 
+                (ctx as WorkerCanvas).crowds[crowdId].animating = true;
+                let obsv = () => {//scene.onBeforeRenderObservable.add(() => {
+                    let updates = this.__node.graph.run(
+                        'animateCrowd',
+                        nav,
+                        (ctx as WorkerCanvas).crowds[crowdId].crowd,
+                        (ctx as WorkerCanvas).crowds[crowdId].entities,
+                        tick,
+                        engine.getFps(),
+                        (ctx as WorkerCanvas).crowds[crowdId].target
+                    );
+                    tick++;
+                    //console.log(updates);
+                    if(physicsPort) {
+                        this.__node.graph.workers[physicsPort]?.run('updatePhysicsEntities', updates);
+                    }
+                    
+                    if((ctx as WorkerCanvas).crowds[crowdId].animating)
+                        requestAnimationFrame(obsv);
+                };//);
+                
+                requestAnimationFrame(obsv);
+
+                return crowdId;
+
+            },
+            removeEntity:function (
+                id:string,
+                ctx?:string|WorkerCanvas
+            ) {
+
+                if(!ctx || typeof ctx === 'string')
+                    ctx = this.__node.graph.run('getCanvas',ctx);
+
+                if(typeof ctx !== 'object') return undefined;
+
+                const nav = ctx.nav as BABYLON.RecastJSPlugin;
+                const engine = ctx.engine as BABYLON.Engine;
+                const scene = ctx.scene as BABYLON.Scene;
+
+
+                let mesh = scene.getMeshByName(id)
+                if(mesh) scene.removeMesh(mesh);
+                return mesh !== undefined;
             },
             animateCrowd:function(
                 nav:BABYLON.RecastJSPlugin,
                 crowd:BABYLON.ICrowd,
                 entities:BABYLON.Mesh[],
-                target:BABYLON.Mesh,
                 tick:number,
-                fps:number
+                fps:number,
+                target?:BABYLON.Mesh,
             ) {
 
-                if(tick % 10 === 0) {
-                    let point = nav.getClosestPoint(target.position);
+                if(tick % fps === 0) {
                     
-                    entities.forEach((e,i) => {
+                    entities.forEach((e,i) => { //update the crowd positions based on the physics engine's updates to the meshes
                         crowd.agentTeleport(i, e.position);
-                    })
-                    crowd.agentGoto(0, point);
+                    });
+
+                    if(target) {
+                        let point = nav.getClosestPoint(target.position);
+                        entities.forEach((e, i) => {crowd.agentGoto(i, point); });
+                    }
                 
                 }
                 
@@ -583,7 +849,6 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                 entities.forEach((e,i) => {
                     let agentVelocity = crowd.getAgentVelocity(0);
 
-    
                     let _fps = 1/fps;
                     let acceleration = {
                         x:agentVelocity.x*_fps*2, 
@@ -594,17 +859,9 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     agentUpdates[e.id] = {acceleration};
                 })
 
-                return [
-                    agentUpdates,
-                    tick                    
-                ]
+                return agentUpdates;
                 //this.__node.graph.workers[portId]?.run('updatePhysicsEntity', [entity.id,agentUpdates[entity.id]]);
             },
-            removeEntity:function (scene:BABYLON.Scene, entity:string) {
-                let mesh = scene.getMeshByName(entity)
-                if(mesh) scene.removeMesh(mesh);
-                return mesh !== undefined;
-            }
         }
     });
 

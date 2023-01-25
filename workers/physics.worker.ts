@@ -145,6 +145,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                     if(settings.mass) {
                         entity.collider(0).setMass(settings.mass);
                     } else entity.collider(0).setMass(1);
+                    
                     if(settings.centerOfMass) {
                         entity.collider(0).setMassProperties(
                             settings.mass as number,
@@ -170,6 +171,35 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         )
                     }
                 }
+            },
+            updatePhysicsEntities:function(updates:{[key:string]:Partial<PhysicsEntityProps>}|number[]) {
+                if(Array.isArray(updates)) {
+                    let i = 0;
+                    let hasRotation = (updates.length / (this.__node.graph.world as RAPIER.World).bodies.len()) === 7;
+                    let offset = hasRotation ? 7 : 3;
+                    (this.__node.graph.world as RAPIER.World).bodies.forEach((body)=>{
+                        let j = i * offset;
+                        body.setTranslation(
+                            {
+                                x:updates[j],
+                                y:updates[j+1],
+                                z:updates[j+2],
+                            },
+                            true
+                        );
+                        if(hasRotation) body.setRotation(
+                            {
+                                x:updates[j+3],
+                                y:updates[j+4],
+                                z:updates[j+5],
+                                w:updates[j+6]
+                            },
+                            true
+                        );
+                        i++;
+                    })
+                }
+                else for(const key in updates) this.__node.graph.run('updatePhysicsEntity',key,updates[key]);
             },
             stepWorld:function(
                 getValues?:boolean,

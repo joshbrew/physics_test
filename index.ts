@@ -12,19 +12,19 @@
 
 //import * as B from 'babylonjs'
 //import * as THREE from 'three'
-import { WorkerInfo } from 'graphscript';
 import { 
     WorkerCanvas, 
     WorkerCanvasControls, 
+    WorkerInfo,
     WorkerService, 
     htmlloader, 
     workerCanvasRoutes,
     Loader
-} from '../graphscript/index'//
+} from 'graphscript' //'../graphscript/index'//
 
-import {PhysicsEntityProps} from './workers/types'
-import physicsworker from './workers/physics.worker'
-import renderworker from './workers/renderer.worker'
+// import {PhysicsEntityProps} from './workers/types'
+// import physicsworker from './workers/physics.worker'
+// import renderworker from './workers/renderer.worker'
 
 // import keyboard from 'keyboardjs'
 
@@ -52,9 +52,10 @@ let graph = new WorkerService({
                             collisionType:'ball',
                             radius:1,
                             dynamic:true,
-                            restitution:0.9,
+                            restitution:0.3,
                             position:{x:3,y:2,z:3},
                             impulse:{x:0,y:0,z:0},
+                            crowd:'zombies'
                             //force:{x:0,y:0,z:30}
                         },
                         {
@@ -62,9 +63,10 @@ let graph = new WorkerService({
                             collisionType:'ball',
                             radius:1,
                             dynamic:true,
-                            restitution:0.9,
-                            position:{x:0,y:10,z:5},
-                            impulse:{x:0,y:10,z:-20}
+                            restitution:0.3,
+                            position:{x:0,y:15,z:5},
+                            impulse:{x:0,y:15,z:-20},
+                            crowd:'zombies'
                         },
                         {
                             _id:'capsule1', //kinda jank
@@ -75,6 +77,7 @@ let graph = new WorkerService({
                             restitution:0.5,
                             position:{x:0,y:5,z:-3},
                             rotation:{x:1,y:0,z:0,w:1},
+                            targetOf:'zombies'
                             //impulse:{x:0,y:0,z:30}
                         },
                         {
@@ -83,7 +86,7 @@ let graph = new WorkerService({
                             dimensions:{width:2,height:2,depth:2},
                             dynamic:true,
                             restitution:0.1,
-                            position:{x:0,y:15,z:3},
+                            position:{x:-3,y:15,z:3},
                             //impulse:{x:0,y:0,z:0}
                         },
                         {
@@ -92,7 +95,8 @@ let graph = new WorkerService({
                             dimensions:{width:10,height:1,depth:10},
                             dynamic:false,
                             restitution:1,
-                            position:{x:0,y:0,z:0}
+                            position:{x:0,y:0,z:0},
+                            navMesh:'test'
                         },
                         {
                             _id:'leftwall',
