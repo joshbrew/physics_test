@@ -134,8 +134,8 @@ export async function createRenderer(
         ]);
 
         renderer.post('subscribeToWorker',[
-            'stepWorld',
-            physicsPort,
+            'updateEntities',
+            navPort,
             'updateEntities'
         ]); //runs entirely off main thread
 

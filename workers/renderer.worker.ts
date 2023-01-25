@@ -543,6 +543,8 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
                         }
                     }
                 }
+
+                return data; //echo for chaining threads
             },
             createNavMeshData: async (data) => {
                 // get message datas
