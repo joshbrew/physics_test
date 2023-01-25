@@ -707,7 +707,10 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
 
 
                 let navmeshdebug = new BABYLON.Mesh('navDebugMesh', scene);
+                
                 navmeshdebug.setVerticesData(BABYLON.VertexBuffer.PositionKind, data);
+
+                console.log(navmeshdebug);
 
                 navmeshdebug.position = new BABYLON.Vector3(0, 0.01, 0);
                 let matdebug = new BABYLON.StandardMaterial('matdebug', scene);

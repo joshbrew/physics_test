@@ -60,17 +60,6 @@ export async function createRenderer(
     //     elm.requestPointerLock();
     // });
 
-    node.renderer = await graph.run( 
-        'transferCanvas',
-        renderer.worker,
-        {
-            canvas:elm,
-            context:undefined,
-            _id:elm.id,
-            entities
-        },
-        'receiveBabylonCanvas'
-    ) as WorkerCanvasControls;
 
     await navigation.run('initEngine',
     {
@@ -118,7 +107,19 @@ export async function createRenderer(
     physics.run('initWorld', [
         entities, 
         { x: 0.0, y: -9.81, z:0 }
-    ]).then(() => {
+    ]).then(async () => {
+
+        node.renderer = await graph.run( 
+            'transferCanvas',
+            renderer.worker,
+            {
+                canvas:elm,
+                context:undefined,
+                _id:elm.id,
+                entities
+            },
+            'receiveBabylonCanvas'
+        ) as WorkerCanvasControls;
 
         physics.post('subscribeToWorker', [
             'animateCrowd',
