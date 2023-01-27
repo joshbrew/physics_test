@@ -93,7 +93,7 @@ export async function createRenderer(
         ]
     );
 
-    console.log(meshCreated);
+    //console.log(meshCreated);
     
     for(const key in crowds) {
         let crowdId = await navigation.run(
