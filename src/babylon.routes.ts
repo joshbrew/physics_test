@@ -85,7 +85,7 @@ export const babylonRoutes = {
                     rotation:{x:number,y:number,z:number,w:number} 
                 }}|number[]
             ) {
-                this.__node.graph.run('updateEntities', data);
+                this.__node.graph.run('updateBabylonEntities', data);
 
             },
             clear:function (self:WorkerCanvas, canvas, context) {
@@ -349,7 +349,7 @@ export const babylonRoutes = {
         
         return settings._id;
     },
-    updateEntities:function(
+    updateBabylonEntities:function(
         data:{[key:string]:{ 
             position:{x:number,y:number,z:number}, 
             rotation:{x:number,y:number,z:number,w:number} 
@@ -411,6 +411,51 @@ export const babylonRoutes = {
 
         return data; //echo for chaining threads
     },
+    removeBabylonEntity:function (
+        id:string,
+        ctx?:string|WorkerCanvas
+    ) {
+
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+
+        // const nav = ctx.nav as BABYLON.RecastJSPlugin;
+        // const engine = ctx.engine as BABYLON.Engine;
+        const scene = ctx.scene as BABYLON.Scene;
+
+        if(ctx.entities[id].crowdId) {
+            ctx.crowds[ctx.entities[id].crowdId].entities.find((o,i) => { 
+                if(o.id === id) {
+                    ((ctx as any).crowds[(ctx as any).entities[id].crowdId].crowd as BABYLON.ICrowd).removeAgent(i);
+                    (ctx as any).crowds[(ctx as any).entities[id].crowdId].entities.splice(i,1);
+                    return true;
+                } 
+            });
+        }
+        if(ctx.entities[id].navMesh && ctx.navMesh) {
+            ctx.navMesh.meshesToMerge.find((o,i) => {
+                if(o.id === id) {
+                    ((ctx as any).navMesh.meshesToMerge as BABYLON.Mesh[]).splice(i,1);
+                    this.__node.graph.run(
+                        'createNavMesh',  
+                        (ctx as any).navMesh.meshesToMerge,  
+                        (ctx as any).navMesh.navMeshParameters, 
+                        (ctx as any).navMesh.debug,
+                        (ctx as any).navMesh.sendDebug,
+                        undefined,
+                        (ctx as any)._id
+                    );
+                }
+            })
+        }
+
+        let mesh = scene.getMeshByName(id)
+        if(mesh) scene.removeMesh(mesh);
+
+        return id; //echo id for physics and nav threads to remove to remove by subscribing
+    },
     createNavMeshData: async (data) => {
         // get message datas
         const recast = await Recast() as any;
@@ -464,22 +509,46 @@ export const babylonRoutes = {
         ctx?:string|WorkerCanvas
     ) {
 
-
         if(!ctx || typeof ctx === 'string')
             ctx = this.__node.graph.run('getCanvas',ctx);
 
         if(typeof ctx !== 'object') return undefined;
 
         if(!ctx.nav) ctx.nav = new BABYLON.RecastJSPlugin(await Recast()); 
-        const nav = ctx.nav as BABYLON.RecastJSPlugin;
         const scene = ctx.scene as BABYLON.Scene;
 
         if(typeof meshesToMerge[0] === 'string') {
             meshesToMerge = meshesToMerge.map((o) => { return scene.getMeshById(o); }) as BABYLON.Mesh[]; 
         }
 
-        let merged = BABYLON.Mesh.MergeMeshes(meshesToMerge as BABYLON.Mesh[]);
-        
+        return this.__node.graph.run(
+            'setNavMeshData', 
+            meshesToMerge, 
+            params, 
+            debug, 
+            sendDebug, 
+            useWorker, 
+            ctx
+        );
+
+    },
+    setNavMeshData:function(
+        meshesToMerge: BABYLON.Mesh[],
+        params?:BABYLON.INavMeshParameters,
+        debug?:boolean,
+        sendDebug?:string, //send the mesh to a port to render the debug?
+        useWorker?:string, //custom workerURL?
+        ctx?:string|WorkerCanvas
+    ) {
+
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+
+        const nav = ctx.nav as BABYLON.RecastJSPlugin;
+        const scene = ctx.scene as BABYLON.Scene;
+
         var navMeshParameters = {
             cs: 0.2,
             ch: 0.2,
@@ -498,11 +567,8 @@ export const babylonRoutes = {
 
         if(params) Object.assign(navMeshParameters,params);
 
-        const navMeshId = `navmesh${Math.floor(Math.random()*1000000000000000)}`;
+        let merged = BABYLON.Mesh.MergeMeshes(meshesToMerge as BABYLON.Mesh[], false);
 
-        if(!ctx.navMeshes) ctx.navMeshes = {} as any;
-
-        
         //@ts-ignore
         if(!nav._worker) {
             // use a secondary worker to load the navMeshes
@@ -513,24 +579,18 @@ export const babylonRoutes = {
             nav._worker = worker;
         }
 
-        // test the worker
-        // worker.addEventListener('onmessage', (msg) => {
-        //     console.log('message', msg);
-        // });
-        //@ts-ignore
-        //nav._worker.postMessage('test'); //test
-
-        //library call, didn't work for some reason...
-        //nav.setWorkerURL(`${location.origin}/dist/navmesh.worker.js`);
-
-
-        const withNavMesh = (navMeshData) => {
-            (ctx as WorkerCanvas).navMeshes[navMeshId] = navMeshData;
-            if(typeof navMeshData === 'string' && (ctx as WorkerCanvas).navMeshes) 
-                navMeshData = (ctx as WorkerCanvas).navMeshes[navMeshData];
-            if(typeof navMeshData !== 'object') return undefined;
-
-            if(isTypedArray(navMeshData)) nav.buildFromNavmeshData(navMeshData);
+        const withNavMesh = (navMeshData:Uint8Array) => {
+            //console.log(navMeshData);
+            (ctx as WorkerCanvas).navMesh = {
+                navMeshData, 
+                merged, 
+                meshesToMerge, 
+                navMeshParameters, 
+                debug, 
+                sendDebug
+            };
+            
+            nav.buildFromNavmeshData(navMeshData);
 
             //-------------------------
             //----------debug----------
@@ -541,7 +601,7 @@ export const babylonRoutes = {
                     let data = debugNavMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
                     (this.__node.graph.workers[sendDebug] as WorkerInfo)?.run(
                         'createDebugNavMesh', 
-                        [data]
+                        [data, (ctx as WorkerCanvas)._id]
                     );
                 } else {
                     this.__node.graph.run('createDebugNavMesh', debugNavMesh);
@@ -550,7 +610,7 @@ export const babylonRoutes = {
             //-------------------------
             //-------------------------
             //-------------------------
-            return navMeshId; //will live on ctx.navMeshes, returns Id so you can gain the reference on the main thread
+            return true; //will live on ctx.navMesh
         }
 
         return new Promise((res) => {
@@ -558,10 +618,34 @@ export const babylonRoutes = {
                 [merged as any], 
                 navMeshParameters, 
                 (navMeshData) => {
-                    res(withNavMesh(navMeshData)); //will live on ctx.navMeshes, returns Id so you can gain the reference on the main thread
+                    let created = withNavMesh(navMeshData);
+                    res(created); //will live on ctx.navMesh
                 }
             )
         });
+    },
+    addToNavMesh:function(meshes:BABYLON.Mesh[]|string[], ctx?:string|WorkerCanvas) {
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+
+        const scene = ctx.scene as BABYLON.Scene;
+
+        if(ctx.navMesh) {
+            if(typeof meshes[0] === 'string') {
+                meshes = meshes.map((o) => { return scene.getMeshById(o); }) as BABYLON.Mesh[]; 
+            }
+
+            this.__node.graph.run(
+                'setNavMeshData', 
+                [...meshes, ctx.navMesh.merged], 
+                ctx.navMesh.navMeshParameters, 
+                ctx.navMesh.debug, 
+                ctx.navMesh.sendDebug
+            );
+        }
+
     },
     createDebugNavMesh:function(data:Float32Array, ctx?:WorkerCanvas|string) {
 
@@ -577,7 +661,7 @@ export const babylonRoutes = {
         
         navmeshdebug.setVerticesData(BABYLON.VertexBuffer.PositionKind, data);
 
-        console.log(navmeshdebug);
+        //console.log(navmeshdebug);
 
         navmeshdebug.position = new BABYLON.Vector3(0, 0.01, 0);
         let matdebug = new BABYLON.StandardMaterial('matdebug', scene);
@@ -601,23 +685,28 @@ export const babylonRoutes = {
         const engine = ctx.engine as BABYLON.Engine;
         const scene = ctx.scene as BABYLON.Scene;
 
+        let crowdId = `crowd${Math.floor(Math.random()*1000000000000000)}`;
+
         if(typeof entities[0] === 'string') {
             entities = entities.map((o) => { 
                 return scene.getMeshById(o); 
             }) as BABYLON.Mesh[]; 
         }
 
-        if(typeof initialTarget === 'string') 
-            initialTarget = scene.getMeshById(initialTarget) as BABYLON.Mesh;
+        for(const e of entities) {
+            (e as any).crowdId = crowdId;
+        }
 
-        let crowd = nav.createCrowd(entities.length, 0.1, scene);
-
-        let crowdId = `crowd${Math.floor(Math.random()*1000000000000000)}`;
+        let crowd = nav.createCrowd(entities.length, 10, scene);
 
         if(!ctx.crowds) 
             ctx.crowds = {};
-        
+
+        if(typeof initialTarget === 'string') 
+            initialTarget = scene.getMeshById(initialTarget) as BABYLON.Mesh;
+            
         ctx.crowds[crowdId] = {crowd, target:initialTarget, entities};
+
 
         let agentParams = {
             radius: 0.1,
@@ -629,16 +718,17 @@ export const babylonRoutes = {
             separationWeight: 1.0
         } as BABYLON.IAgentParameters;
 
-        if(params) Object.assign(agentParams,params);
+        if(params) Object.assign(agentParams, params);
 
         entities.forEach((entity) => {
             let transform = new BABYLON.TransformNode(`${entity.id}TransformNode`, scene);
-            crowd.addAgent(nav.getClosestPoint(entity.position), agentParams, transform);
+            let point = nav.getClosestPoint(entity.position);
+            crowd.addAgent(point, agentParams, transform);
         })
 
-        if(initialTarget) {
-            let point = nav.getClosestPoint(initialTarget.position);
-            entities.forEach((e, i) => {
+        if(typeof initialTarget === 'object') {
+            let point = nav.getClosestPoint(initialTarget.position as BABYLON.Vector3);
+            crowd.getAgents().forEach((i) => {
                 crowd.agentGoto(i, point); 
             });
         }
@@ -654,7 +744,7 @@ export const babylonRoutes = {
                 (ctx as WorkerCanvas).crowds[crowdId].entities,
                 tick,
                 engine.getFps(),
-                (ctx as WorkerCanvas).crowds[crowdId].target
+                (ctx as WorkerCanvas).crowds[crowdId].target.position
             );
             tick++;
             //console.log(updates);
@@ -671,31 +761,89 @@ export const babylonRoutes = {
         return crowdId;
 
     },
-    removeEntity:function (
-        id:string,
+    addCrowdAgent:function (
+        entity:string|BABYLON.Mesh,
+        crowdId:string,
+        params?:Partial<BABYLON.IAgentParameters>,
         ctx?:string|WorkerCanvas
     ) {
-
         if(!ctx || typeof ctx === 'string')
             ctx = this.__node.graph.run('getCanvas',ctx);
 
         if(typeof ctx !== 'object') return undefined;
 
-        // const nav = ctx.nav as BABYLON.RecastJSPlugin;
-        // const engine = ctx.engine as BABYLON.Engine;
         const scene = ctx.scene as BABYLON.Scene;
 
-        let mesh = scene.getMeshByName(id)
-        if(mesh) scene.removeMesh(mesh);
-        return mesh !== undefined;
+        if(ctx.crowds?.[crowdId]) {
+            const crowd = ctx.crowds?.[crowdId].crowd as BABYLON.ICrowd;
+            if(typeof entity === 'string') {
+                entity = scene.getMeshById(entity) as BABYLON.Mesh;
+            }
+
+            let agentParams = {
+                radius: 0.1,
+                height: 0.2,
+                maxAcceleration: 4.0,
+                maxSpeed: 1.0,
+                collisionQueryRange: 0.5,
+                pathOptimizationRange: 0.1,
+                separationWeight: 1.0
+            } as BABYLON.IAgentParameters;
+    
+            if(params) Object.assign(agentParams, params);
+
+            if(typeof entity === 'object') {
+                let transform = new BABYLON.TransformNode(`${entity.id}TransformNode`, scene);
+                let idx = crowd.addAgent(entity.position, agentParams, transform);
+
+                if(ctx.crowds?.[crowdId].target)
+                    crowd.agentGoto(idx,ctx.crowds?.[crowdId].target);
+
+                return entity.id;
+            }
+        }
     },
-    animateCrowd:function(
+    setCrowdTarget:function (
+        target:string|BABYLON.Mesh|BABYLON.Vector3,
+        crowdId:string,
+        ctx?:string|WorkerCanvas
+    ) {
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+
+        const scene = ctx.scene as BABYLON.Scene;
+        const nav = ctx.nav as BABYLON.RecastJSPlugin;
+
+        if(ctx.crowds?.[crowdId]) {
+
+            const crowd = ctx.crowds?.[crowdId].crowd as BABYLON.ICrowd;
+
+            if(typeof target === 'string') 
+                target = scene.getMeshById(target) as BABYLON.Mesh;
+
+            if(typeof target === 'object') {
+
+                if((target as BABYLON.Mesh)?.position) 
+                target = (target as BABYLON.Mesh).position as BABYLON.Vector3;
+
+                let point = nav.getClosestPoint(target as BABYLON.Vector3);
+
+                ctx.crowds[crowdId].target = target;
+
+                crowd.getAgents().forEach((i) => { crowd.agentGoto(i, point); });
+
+            }
+        }
+    },
+    animateCrowd:function( //internal use function, with subscribable outputs on the graph
         nav:BABYLON.RecastJSPlugin,
         crowd:BABYLON.ICrowd,
         entities:BABYLON.Mesh[],
         tick:number,
         fps:number,
-        target?:BABYLON.Mesh,
+        target?:BABYLON.Vector3,
     ) {
 
         let needsUpdate = tick % Math.floor(fps*.3) === 0;
@@ -707,7 +855,7 @@ export const babylonRoutes = {
             });
 
             if(target) {
-                let point = nav.getClosestPoint(target.position);
+                let point = nav.getClosestPoint(target);
                 entities.forEach((e, i) => {crowd.agentGoto(i, point); });
             }
         
@@ -728,7 +876,6 @@ export const babylonRoutes = {
                 z:agentVelocity.z*_fps*2
             };
 
-            
             // if(needsUpdate) { //provides a stronger direction change impulse
             //     acceleration.x += agentVelocity.x;
             //     acceleration.y += agentVelocity.y;

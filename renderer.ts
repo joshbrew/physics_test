@@ -60,10 +60,11 @@ export async function createRenderer(
     //     elm.requestPointerLock();
     // });
 
+    let _id = elm.id ? elm.id : `renderer${Math.floor(Math.random()*1000000000000000)}`;
 
     await navigation.run('initEngine',
     {
-        _id:elm.id,
+        _id,
         entities
     });
 
@@ -82,7 +83,7 @@ export async function createRenderer(
         if(o.targetOf) targets[o.targetOf] = o._id;
     })
 
-    let meshId = await navigation.run(
+    let meshCreated = await navigation.run(
         'createNavMesh', 
         [
             navMeshes,
@@ -91,6 +92,8 @@ export async function createRenderer(
             navPort //send the resulting mesh to main thread to render
         ]
     );
+
+    console.log(meshCreated);
     
     for(const key in crowds) {
         let crowdId = await navigation.run(
@@ -115,32 +118,80 @@ export async function createRenderer(
             {
                 canvas:elm,
                 context:undefined,
-                _id:elm.id,
-                entities
+                _id,
+                entities,
+                physicsPort,
+                navPort
             },
             'receiveBabylonCanvas'
         ) as WorkerCanvasControls;
 
+        //update physics trajectories using the navmesh
         physics.post('subscribeToWorker', [
             'animateCrowd',
             navPhysicsPort,
             'updatePhysicsEntities'
-        ])
+        ]);
 
+        //update entity positions from the physics thread
         navigation.post('subscribeToWorker',[
             'stepWorld',
             navPhysicsPort,
-            'updateEntities'
+            'updateBabylonEntities'
         ]);
 
+        //update the render thread from the navigation thread
         renderer.post('subscribeToWorker',[
-            'updateEntities',
+            'updateBabylonEntities',
             navPort,
-            'updateEntities'
+            'updateBabylonEntities'
         ]); //runs entirely off main thread
+
+        //simulatenously clean up entities across threads
+        physics.post('subscribeToWorker',[
+            'removePhysicsEntity',
+            physicsPort,
+            'removeBabylonEntity'
+        ]);
+        navigation.post('subscribeToWorker',[
+            'removeBabylonEntity',
+            navPort,
+            'removeBabylonEntity'
+        ])
 
 
         physics.post('animateWorld', [true, false]);
     });
 
+    return {
+        _id,
+        renderer,
+        navigation,
+        physics,
+        physicsPort,
+        navPort,
+        navPhysicsPort
+    }
+};
+
+//configure entities on-the-fly across the threads
+export function addEntity(settings:PhysicsEntityProps, ctx:any) {
+
+    if(!settings._id) settings._id = `entity${Math.floor(Math.random()*1000000000000000)}`;
+
+    (ctx.renderer as WorkerInfo).post('loadBabylonEntity', [settings, ctx._id]);
+    (ctx.navigation as WorkerInfo).post('loadBabylonEntity', [settings, ctx._id]); //duplicate entities for the crowd navigation thread e.g. to add agents, obstacles, etc.
+    if(settings.crowd) {
+        (ctx.navigation as WorkerInfo).post('addCrowdAgent', [settings._id, settings.crowd, ctx._id]);
+    }
+    if(settings.targetOf) {
+        (ctx.navigation as WorkerInfo).post('setCrowdTarget', [settings._id, settings.targetOf, ctx._id]);
+    }
+    if(settings.navMesh) {
+        (ctx.navigation as WorkerInfo).post('addToNavMesh', [settings._id, settings.navMesh, ctx._id]);
+    }
+}
+
+export function removeEntity(id:string, ctx:any) {
+    (ctx.renderer as WorkerInfo).post('removeBabylonEntity', [id]); //will trigger the rest of the threads
 }
