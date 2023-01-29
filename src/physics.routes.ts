@@ -298,7 +298,7 @@ export const physicsRoutes = {
         startPos:Vec3, 
         velocity:Vec3,
         maxToI:number=0.1,
-        withCollision:(collision:RAPIER.ShapeColliderTOI) => void, //deal with the collision
+        withCollision:(collision:RAPIER.ShapeColliderTOI) => void, //deal with the collision, does not return multiple collisions, use sphereIntersections for tha, e.g. chaining these commands using the witness vector
         stopAtPenetration:boolean = true,
         filterFlags?:RAPIER.QueryFilterFlags,
         filterGroups?:number,
