@@ -298,13 +298,13 @@ export const physicsRoutes = {
         startPos:Vec3, 
         velocity:Vec3,
         maxToI:number=0.1,
-        withCollision:(collision:RAPIER.ShapeColliderTOI) => void, //return true or false to stop iterating
+        withCollision:(collision:RAPIER.ShapeColliderTOI) => void, //deal with the collision
         stopAtPenetration:boolean = true,
-        filterPredicate?:(colliderHandle:number) => boolean, //return true to continue the sphere cast with the previous collider filtered
         filterFlags?:RAPIER.QueryFilterFlags,
         filterGroups?:number,
         filterExcludeCollider?:number,
         filterExcludeRigidBody?:number,
+        filterPredicate?:(colliderHandle:number) => boolean //return true to continue the sphere cast with the previous closest collider filtered
     ) {
         const world = this.__node.graph.world as RAPIER.World;
 
