@@ -41,12 +41,34 @@ export const babylonRoutes = {
 
                 self.camera = this.__node.graph.run('attachFreeCamera', 0.5, self);
 
+                const cameraControls = this.__node.graph.run('addCameraControls', self); //default camera controls
+                self.controls = cameraControls;
+
                 canvas.addEventListener('resize', () => { 
                     engine.setSize(canvas.clientWidth,canvas.clientHeight); //manual resize
                 });
 
-                setTimeout(() => { engine.setSize(canvas.clientWidth,canvas.clientHeight);  }, 100);
+                //update internal scene info
+                canvas.addEventListener('mousemove', (ev) => {
+                    scene.pointerX = ev.clientX;
+                    scene.pointerY = ev.clientY;
+                });
 
+                //scene picking
+                canvas.addEventListener('mousedown', (ev) => {
+                    let picked = scene.pick(scene.pointerX, scene.pointerY);
+
+                    if(picked) {
+                        if(picked.pickedMesh) {
+                            if(picked.pickedMesh.name === 'capsule1') {
+                                if(self.controls) this.__node.graph.run('removeControls', self.controls, self);
+                            } 
+                            else if(!self.controls) self.controls = this.__node.graph.run('addCameraControls', self);
+                        }
+                    }
+                });
+
+                setTimeout(() => { engine.setSize(canvas.clientWidth,canvas.clientHeight);  }, 100);
 
 
                 const light = new BABYLON.SpotLight(
@@ -147,7 +169,7 @@ export const babylonRoutes = {
         if(typeof ctx !== 'object') return undefined;
 
         const scene = ctx.scene as BABYLON.Scene;
-        const canvas = ctx.canvas as OffscreenCanvas;
+        const canvas = ctx.canvas as OffscreenCanvas|HTMLCanvasElement;
 
         const camera = new BABYLON.FreeCamera(
             'camera', 
@@ -160,6 +182,20 @@ export const babylonRoutes = {
         camera.setTarget(new BABYLON.Vector3(0,0,0));
 
         camera.speed = speed;
+
+        return camera;
+    },
+    addCameraControls:function(ctx?:string|WorkerCanvas) {
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+
+        const scene = ctx.scene as BABYLON.Scene;
+        const canvas = ctx.canvas as OffscreenCanvas|HTMLCanvasElement;
+        const camera = ctx.camera as BABYLON.FreeCamera;
+
+        if(!camera) return undefined;
 
         let w = () => {
             camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Forward().scale(camera.speed)))
@@ -179,10 +215,11 @@ export const babylonRoutes = {
         let space = () => {
             camera.position.addInPlace(BABYLON.Vector3.Up().scale(camera.speed))
         }
-        
+
         let wobserver, aobserver, sobserver, dobserver, ctrlobserver, spaceobserver;
         //need to set custom controls
-        canvas.addEventListener('keydown', (ev:any) => { //these key events are proxied from main thread
+        
+        let keydownListener = (ev:any) => { //these key events are proxied from main thread
             if(ev.keyCode === 87 || ev.keycode === 38) {
                 if(!wobserver) wobserver = scene.onBeforeRenderObservable.add(w);
             }
@@ -202,9 +239,11 @@ export const babylonRoutes = {
                 if(!spaceobserver) spaceobserver = scene.onBeforeRenderObservable.add(space);
             }
             //console.log(ev);
-        });
+        }
+        
+        canvas.addEventListener('keydown', keydownListener);
        
-        canvas.addEventListener('keyup', (ev:any) => {
+        let keyupListener = (ev:any) => {
             
             if(ev.keyCode === 87 || ev.keycode === 38) {
                 if(wobserver) {
@@ -243,7 +282,9 @@ export const babylonRoutes = {
                 }
             }
             //console.log(ev);
-        });
+        }
+
+        canvas.addEventListener('keyup', keyupListener);
         
         let lastMouseMove;
 
@@ -257,17 +298,58 @@ export const babylonRoutes = {
             }
             lastMouseMove = ev;
         }
-        canvas.addEventListener('mousedown', (ev:any) => {
+
+        const mousedownListener = (ev:any) => {
             canvas.addEventListener('mousemove',mousemove);
             //console.log(ev);
-        });
-        canvas.addEventListener('mouseup', (ev:any) => {
+        }
+
+        const mouseupListener = (ev:any) => {
             canvas.removeEventListener('mousemove',mousemove);
             lastMouseMove = null;
             //console.log(ev);
-        });
+        }
 
-        return camera;
+        canvas.addEventListener('mousedown', mousedownListener);
+        canvas.addEventListener('mouseup', mouseupListener);
+
+        return {
+            keydownListener,
+            keyupListener,
+            mousedownListener,
+            mouseupListener
+        }; //controls you can pop off the canvas
+
+    },
+    removeControls:function(controls?:any, ctx?:string|WorkerCanvas) {
+        if(!ctx || typeof ctx === 'string')
+        ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+
+        if(!controls)
+            controls = ctx.controls as any;
+
+        if(!controls) return undefined;
+
+        const canvas = ctx.canvas as OffscreenCanvas|HTMLCanvasElement;
+
+        if(controls.keydownListener) canvas.removeEventListener('keydown', controls.keydownListener);
+        if(controls.keyupListener) canvas.removeEventListener('keyup', controls.keyupListener);
+        if(controls.mouseupListener) canvas.removeEventListener('mouseup', controls.mouseupListener);
+        if(controls.mousedownListener) canvas.removeEventListener('mousedown', controls.mousedownListener);
+        
+        //remove any active controls
+        controls.keyupListener({keyCode:87});
+        controls.keyupListener({keyCode:65});
+        controls.keyupListener({keyCode:83});
+        controls.keyupListener({keyCode:68});
+        controls.keyupListener({keyCode:17});
+        controls.keyupListener({keyCode:32});
+        controls.mouseupListener();
+
+        ctx.controls = null;
+
     },
     loadBabylonEntity:function (
         settings:PhysicsEntityProps,
@@ -456,6 +538,10 @@ export const babylonRoutes = {
 
         return id; //echo id for physics and nav threads to remove to remove by subscribing
     },
+
+
+
+
     createNavMeshData: async (data) => {
         // get message datas
         const recast = await Recast() as any;
