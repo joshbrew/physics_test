@@ -58,14 +58,14 @@ export const babylonRoutes = {
                 canvas.addEventListener('mousedown', (ev) => {
                     let picked = scene.pick(scene.pointerX, scene.pointerY);
 
-                    if(picked) {
-                        if(picked.pickedMesh) {
-                            if(picked.pickedMesh.name === 'capsule1') {
-                                if(self.controls) this.__node.graph.run('removeControls', self.controls, self);
-                            } 
-                            else if(!self.controls) self.controls = this.__node.graph.run('addCameraControls', self);
-                        }
+                    if(picked.pickedMesh?.name === 'capsule1') {
+                        if(self.controls) this.__node.graph.run('removeControls', self.controls, self);
+                        //console.log(picked.pickedMesh);
+                    } 
+                    else if(!self.controls) {
+                        self.controls = this.__node.graph.run('addCameraControls', self);
                     }
+                        
                 });
 
                 setTimeout(() => { engine.setSize(canvas.clientWidth,canvas.clientHeight);  }, 100);
