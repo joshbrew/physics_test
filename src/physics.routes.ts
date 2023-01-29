@@ -342,7 +342,12 @@ export const physicsRoutes = {
     sphereIntersections:function( //find all colliders intersecting a sphere of a given radius and position
         radius:number, 
         startPos:Vec3, 
-        intersects:(collider:RAPIER.Collider) => boolean //return true or false to stop iterating
+        intersects:(collider:RAPIER.Collider) => boolean, //return true or false to stop iterating
+        filterFlags?:RAPIER.QueryFilterFlags,
+        filterGroups?:number,
+        filterExcludeCollider?:number,
+        filterExcludeRigidBody?:number,
+        filterPredicate?:(colliderHandle:number) => boolean //return true to continue the sphere cast with the previous closest collider filtered
     ) {
         const world = this.__node.graph.world as RAPIER.World;
 
@@ -365,7 +370,12 @@ export const physicsRoutes = {
             (handle) => {
                 if(!anyIntersection) anyIntersection = true;
                 return intersects(world.colliders.get(handle) as RAPIER.Collider);
-            }
+            },
+            filterFlags,
+            filterGroups,
+            filterExcludeCollider,
+            filterExcludeRigidBody,
+            filterPredicate
         );
         
         query.free();
