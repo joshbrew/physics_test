@@ -299,11 +299,12 @@ export const physicsRoutes = {
         velocity:Vec3,
         maxToI:number=0.1,
         withCollision:(collision:RAPIER.ShapeColliderTOI) => void, //return true or false to stop iterating
+        stopAtPenetration:boolean = true,
+        filterPredicate?:(colliderHandle:number) => boolean, //return true to continue the sphere cast with the previous collider filtered
         filterFlags?:RAPIER.QueryFilterFlags,
         filterGroups?:number,
         filterExcludeCollider?:number,
-        filterExcludeRigidBody?:number
-
+        filterExcludeRigidBody?:number,
     ) {
         const world = this.__node.graph.world as RAPIER.World;
 
@@ -323,11 +324,12 @@ export const physicsRoutes = {
             velocity,
             sphere,
             maxToI ? maxToI : 0.1,
-            true,
+            stopAtPenetration,
             filterFlags,
             filterGroups,
             filterExcludeCollider,
-            filterExcludeRigidBody
+            filterExcludeRigidBody,
+            filterPredicate
         );
 
         if(colliding) withCollision(colliding);
