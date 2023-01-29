@@ -8,7 +8,7 @@ import {
 } from 'graphscript'
 
 import * as BABYLON from 'babylonjs'
-import { PhysicsEntityProps } from '../src/types';
+import { PhysicsEntityProps, Vec3 } from '../src/types';
 
 import Recast from  "recast-detour"
 
@@ -39,9 +39,9 @@ export const babylonRoutes = {
                 self.engine = engine;
                 self.scene = scene;
 
-                self.camera = this.__node.graph.run('attachFreeCamera', 0.5, self);
+                self.camera = this.__node.graph.run('attachFreeCamera', self);
 
-                const cameraControls = this.__node.graph.run('addCameraControls', self); //default camera controls
+                const cameraControls = this.__node.graph.run('addCameraControls', 0.5, self); //default camera controls
                 self.controls = cameraControls;
 
                 canvas.addEventListener('resize', () => { 
@@ -158,8 +158,62 @@ export const babylonRoutes = {
         }
 
     },
+    addPlayerControls:function(
+        meshId:string,
+        physicsPort:string,
+        maxSpeed?:number,
+        ctx?:string|WorkerCanvas
+    ) {
+        //attach user to object and add controls for moving the object around
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+
+        const scene = ctx.scene as BABYLON.Scene;
+
+        let mesh = scene.getMeshById(meshId);
+
+        let velocity = {x:0, y:0, z:0};
+
+        //magnitude
+        let magnitude = (v:Vec3) => {
+            return Math.sqrt(v.x*v.x+v.y*v.y+v.z*v.z);
+        }
+
+        //unit vector for rescaling velocity e.g. for gamepad omnidirectional movement
+        let unitVec = (v:Vec3) => {
+            let _mag = 1/magnitude(v);
+            return {x:v.x*_mag, y:v.y*_mag, z:v.z*_mag};
+        }
+
+        //various controls
+        let forward;
+        let backward;
+        let left;
+        let right;
+        let jump;
+        let run;
+        let look;
+        let aim;
+        let shoot;
+        let raycastActivate; //activate crowd members in proximity when crossing a raycast (i.e. vision)
+        let placementMode; //place objects in the scene as navigation obstacles, trigger navmesh rebuilding for agent maneuvering 
+
+        //implement above controls with these event listeners
+        let keyDownListener;
+        let keyupListener;
+        let mouseupListener;
+        let mousedownListener;
+        let mousemoveListener;
+
+
+        if(physicsPort) {
+            (this.__node.graph.workers[physicsPort] as WorkerInfo).post('updatePhysicsEntity', [meshId, {dynamic:false}]); //set it as a static mesh
+        }
+
+    },
     attachFreeCamera:function (
-        speed=0.5,
         ctx?:string|WorkerCanvas
     ) {
 
@@ -169,7 +223,6 @@ export const babylonRoutes = {
         if(typeof ctx !== 'object') return undefined;
 
         const scene = ctx.scene as BABYLON.Scene;
-        const canvas = ctx.canvas as OffscreenCanvas|HTMLCanvasElement;
 
         const camera = new BABYLON.FreeCamera(
             'camera', 
@@ -181,11 +234,46 @@ export const babylonRoutes = {
 
         camera.setTarget(new BABYLON.Vector3(0,0,0));
 
-        camera.speed = speed;
-
         return camera;
     },
-    addCameraControls:function(ctx?:string|WorkerCanvas) {
+    removeControls:function(
+        controls?:any, 
+        ctx?:string|WorkerCanvas
+    ) {
+        if(!ctx || typeof ctx === 'string')
+        ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+
+        if(!controls)
+            controls = ctx.controls as any;
+
+        if(!controls) return undefined;
+
+        const canvas = ctx.canvas as OffscreenCanvas|HTMLCanvasElement;
+
+        if(controls.keydownListener) canvas.removeEventListener('keydown', controls.keydownListener);
+        if(controls.keyupListener) canvas.removeEventListener('keyup', controls.keyupListener);
+        if(controls.mouseupListener) canvas.removeEventListener('mouseup', controls.mouseupListener);
+        if(controls.mousedownListener) canvas.removeEventListener('mousedown', controls.mousedownListener);
+        if(controls.mousemoveListener) canvas.removeEventListener('mousedown', controls.mousemoveListener);
+        
+        //remove any active controls
+        controls.keyupListener({keyCode:87});
+        controls.keyupListener({keyCode:65});
+        controls.keyupListener({keyCode:83});
+        controls.keyupListener({keyCode:68});
+        controls.keyupListener({keyCode:17});
+        controls.keyupListener({keyCode:32});
+        controls.mouseupListener();
+
+        ctx.controls = null;
+
+    },
+    addCameraControls:function(
+        speed=0.5,
+        ctx?:string|WorkerCanvas
+    ) {
         if(!ctx || typeof ctx === 'string')
             ctx = this.__node.graph.run('getCanvas',ctx);
 
@@ -194,6 +282,8 @@ export const babylonRoutes = {
         const scene = ctx.scene as BABYLON.Scene;
         const canvas = ctx.canvas as OffscreenCanvas|HTMLCanvasElement;
         const camera = ctx.camera as BABYLON.FreeCamera;
+
+        camera.speed = speed;
 
         if(!camera) return undefined;
 
@@ -319,36 +409,6 @@ export const babylonRoutes = {
             mousedownListener,
             mouseupListener
         }; //controls you can pop off the canvas
-
-    },
-    removeControls:function(controls?:any, ctx?:string|WorkerCanvas) {
-        if(!ctx || typeof ctx === 'string')
-        ctx = this.__node.graph.run('getCanvas',ctx);
-
-        if(typeof ctx !== 'object') return undefined;
-
-        if(!controls)
-            controls = ctx.controls as any;
-
-        if(!controls) return undefined;
-
-        const canvas = ctx.canvas as OffscreenCanvas|HTMLCanvasElement;
-
-        if(controls.keydownListener) canvas.removeEventListener('keydown', controls.keydownListener);
-        if(controls.keyupListener) canvas.removeEventListener('keyup', controls.keyupListener);
-        if(controls.mouseupListener) canvas.removeEventListener('mouseup', controls.mouseupListener);
-        if(controls.mousedownListener) canvas.removeEventListener('mousedown', controls.mousedownListener);
-        
-        //remove any active controls
-        controls.keyupListener({keyCode:87});
-        controls.keyupListener({keyCode:65});
-        controls.keyupListener({keyCode:83});
-        controls.keyupListener({keyCode:68});
-        controls.keyupListener({keyCode:17});
-        controls.keyupListener({keyCode:32});
-        controls.mouseupListener();
-
-        ctx.controls = null;
 
     },
     loadBabylonEntity:function (
