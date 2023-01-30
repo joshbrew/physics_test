@@ -1210,7 +1210,7 @@ export const babylonRoutes = {
                     const picked = pick();
                     if(picked?.pickedPoint) {
                         point = nav.getClosestPoint(picked.pickedPoint); //projected point ensures better navmesh solving
-                    }
+                    } else point = nav.getClosestPoint(target);
                 }
                 else point = nav.getClosestPoint(target);
 
@@ -1229,7 +1229,7 @@ export const babylonRoutes = {
             let agentVelocity = path.subtract(e.position).normalize().scaleInPlace(4);
             //let path = crowd.getAgentNextTargetPath(i)
 
-            //braking
+            //braking (wip)
             let dir: BABYLON.Vector3;
             if(e.rotationQuaternion) dir = e.rotationQuaternion?.toEulerAngles();
             else dir = e.rotation;
