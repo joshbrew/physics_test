@@ -1211,7 +1211,7 @@ export const babylonRoutes = {
                 if(targetMesh) {
                     const picked = pick();
                     if(picked?.pickedPoint) {
-                        point = nav.getClosestPoint(picked.pickedPoint); //projected point
+                        point = nav.getClosestPoint(picked.pickedPoint); //projected point ensures better navmesh solving
                     }
                 }
                 else point = nav.getClosestPoint(target);
@@ -1225,15 +1225,15 @@ export const babylonRoutes = {
 
         let agentUpdates = {};
         entities.forEach((e,i) => {
-            let agentVelocity = crowd.getAgentVelocity(i);
+            let agentVelocity = crowd.getAgentNextTargetPath(i).subtract(e.position);
             //let path = crowd.getAgentNextTargetPath(i)
 
             //todo: enable specific parameters to update accelerations
             let _fps = 1/fps;
             let acceleration = {
-                x:agentVelocity.x*_fps*2, 
-                y:agentVelocity.y*_fps*2,
-                z:agentVelocity.z*_fps*2
+                x:agentVelocity.x*_fps, 
+                y:agentVelocity.y*_fps,
+                z:agentVelocity.z*_fps
             };
 
             // if(needsUpdate) { //provides a stronger direction change impulse
