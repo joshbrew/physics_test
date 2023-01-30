@@ -284,9 +284,10 @@ export const babylonRoutes = {
         };
 
 
-        if(physicsPort) {
-            (this.__node.graph.workers[physicsPort] as WorkerInfo).post('updatePhysicsEntity', [meshId, {dynamic:false}]); //set it as a static mesh
-        }
+        // restrict entity updates entirely to the controller
+        // if(physicsPort) {
+        //     (this.__node.graph.workers[physicsPort] as WorkerInfo).post('updatePhysicsEntity', [meshId, {dynamic:false}]); //set it as a static mesh
+        // }
 
     },
     removeControls:function(
