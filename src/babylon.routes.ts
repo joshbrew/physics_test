@@ -59,7 +59,7 @@ export const babylonRoutes = {
                 canvas.addEventListener('mousedown', (ev) => {
                     let picked = scene.pick(scene.pointerX, scene.pointerY);
 
-                    if(picked.pickedMesh?.name === 'capsule1' && self.controls?.name !== 'player') {
+                    if(picked.pickedMesh?.name === 'capsule1' && self.controls?.mode !== 'player') {
                         if(self.controls) this.__node.graph.run('removeControls', self.controls, self);
                         self.controls = this.__node.graph.run('addPlayerControls', 'capsule1', self.physicsPort, 2, true)
                         //console.log(picked.pickedMesh);
@@ -202,22 +202,22 @@ export const babylonRoutes = {
         //various controls
         let forward = () => {
             let v = globalDirection ? BABYLON.Vector3.Forward() : mesh.getDirection(BABYLON.Vector3.Forward());
-            velocity = velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
+            velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
         let backward = () => {
             let v = globalDirection ? BABYLON.Vector3.Backward() : mesh.getDirection(BABYLON.Vector3.Backward());
-            velocity = velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
+            velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
         let left = () => {
             let v = globalDirection ? BABYLON.Vector3.Left() : mesh.getDirection(BABYLON.Vector3.Left());
-            velocity = velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
+            velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
         let right = () => {
             let v = globalDirection ? BABYLON.Vector3.Right() : mesh.getDirection(BABYLON.Vector3.Right());
-            velocity = velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
+            velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
 
