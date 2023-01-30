@@ -10,8 +10,7 @@ if(typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope
     const graph = new WorkerService({
         roots:physicsRoutes
     });
-
-
+    
 }
 
 export default self as any;

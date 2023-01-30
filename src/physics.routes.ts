@@ -117,6 +117,13 @@ export const physicsRoutes = {
             );
         }
 
+        if(settings.linearDamping) {
+            rigidbody.setLinearDamping(settings.linearDamping);
+        }
+        if(settings.angularDamping) {
+            rigidbody.setAngularDamping(settings.angularDamping)
+        }
+
         if(!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random()*1000000000000000)}`;
 
         Object.defineProperty(rigidbody, '_id', {value:settings._id, enumerable:true}); //for reference
@@ -194,6 +201,12 @@ export const physicsRoutes = {
                 );
             }
 
+            if(settings.linearDamping) {
+                rigidbody.setLinearDamping(settings.linearDamping);
+            }
+            if(settings.angularDamping) {
+                rigidbody.setAngularDamping(settings.angularDamping)
+            }
 
         }
     },

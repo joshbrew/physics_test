@@ -27,5 +27,7 @@ export type PhysicsEntityProps = {
     force?:Vec3, //initial impulse
     velocity?:Vec3, //directional speed
     angvelocity?:Vec3, //angular velocity
-    acceleration?:Vec3 //will be calculated as a force based on mass
+    acceleration?:Vec3, //will be calculated as a force based on mass
+    linearDamping?:number, //linear damping (drag)
+    angularDamping?:number //angular damping (rotation)
 }

@@ -4,7 +4,8 @@ import {
     CanvasProps, 
     WorkerCanvas, 
     isTypedArray, 
-    WorkerInfo
+    WorkerInfo,
+    WorkerService
 } from 'graphscript'
 
 import * as BABYLON from 'babylonjs'
@@ -161,7 +162,8 @@ export const babylonRoutes = {
     addPlayerControls:function(
         meshId:string,
         physicsPort:string,
-        maxSpeed?:number,
+        maxSpeed:number=0.5,
+        globalDirection?:boolean,
         ctx?:string|WorkerCanvas
     ) {
         //attach user to object and add controls for moving the object around
@@ -171,41 +173,77 @@ export const babylonRoutes = {
         if(typeof ctx !== 'object') return undefined;
 
         const scene = ctx.scene as BABYLON.Scene;
+        const physics = (this.__node.graph as WorkerService).workers[physicsPort];
 
-        let mesh = scene.getMeshById(meshId);
+        if(!physics) return undefined;
 
-        let velocity = {x:0, y:0, z:0};
+        let mesh = scene.getMeshById(meshId) as BABYLON.Mesh;
+        if(!mesh) return undefined;
 
-        //magnitude
-        let magnitude = (v:Vec3) => {
-            return Math.sqrt(v.x*v.x+v.y*v.y+v.z*v.z);
-        }
+        let velocity = new BABYLON.Vector3(0,0,0);
 
-        //unit vector for rescaling velocity e.g. for gamepad omnidirectional movement
-        let unitVec = (v:Vec3) => {
-            let _mag = 1/magnitude(v);
-            return {x:v.x*_mag, y:v.y*_mag, z:v.z*_mag};
-        }
+        let rotdefault = BABYLON.Quaternion.RotationAxis(BABYLON.Vector3.Up(), 0); //let's align the mesh so it stands vertical
+        physics.post('updatePhysicsEntity', [
+            meshId, { 
+                rotation:{ x:rotdefault.x, y:rotdefault.y, z:rotdefault.z, w:rotdefault.w},
+                angularDamping:1 //prevent rotation
+            } as PhysicsEntityProps])
 
         //various controls
-        let forward;
-        let backward;
-        let left;
-        let right;
-        let jump;
-        let run;
-        let look;
+        let forward = () => {
+            let v = globalDirection ? BABYLON.Vector3.Forward() : mesh.getDirection(BABYLON.Vector3.Forward());
+            velocity.addInPlace(v).normalize().scale(maxSpeed);
+            physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, y:velocity.y, z:velocity.z} }])
+        };
+        let backward = () => {
+            let v = globalDirection ? BABYLON.Vector3.Backward() : mesh.getDirection(BABYLON.Vector3.Backward());
+            velocity.addInPlace(v).normalize().scale(maxSpeed);
+            physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, y:velocity.y, z:velocity.z} }])
+        };
+        let left = () => {
+            let v = globalDirection ? BABYLON.Vector3.Left() : mesh.getDirection(BABYLON.Vector3.Left());
+            velocity.addInPlace(v).normalize().scale(maxSpeed);
+            physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, y:velocity.y, z:velocity.z} }])
+        };
+        let right = () => {
+            let v = globalDirection ? BABYLON.Vector3.Right() : mesh.getDirection(BABYLON.Vector3.Right());
+            velocity.addInPlace(v).normalize().scale(maxSpeed);
+            physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, y:velocity.y, z:velocity.z} }])
+        };
+        let jump = () => {
+            let v = BABYLON.Vector3.Up();
+            velocity.addInPlace(v.scale(maxSpeed));
+            physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, y:velocity.y, z:velocity.z} }])
+        };
+
+        let oldMaxSpeed = maxSpeed;
+        let run = () => { maxSpeed *= 2; };
+        let stopRunning = () => { maxSpeed = oldMaxSpeed; }
+
+        //look at point of contact
+        let look = () => {
+            let pickResult = scene.pick(scene.pointerX, scene.pointerY);
+
+            if(pickResult.pickedPoint) {
+                var diffX = pickResult.pickedPoint.x - mesh.position.x;
+                var diffY = pickResult.pickedPoint.z - mesh.position.z;
+                let theta = Math.atan2(diffX,diffY);
+                let rot = BABYLON.Quaternion.RotationAxis(BABYLON.Vector3.Up(), theta);
+                physics.post('updatePhysicsEntity', [meshId, { rotation:{ x:rot.x, y:rot.y, z:rot.z, w:rot.w} }])
+            }
+        };
+
         let aim;
         let shoot;
-        let raycastActivate; //activate crowd members in proximity when crossing a raycast (i.e. vision)
+        let rayOrSphereCastActivate; //activate crowd members in proximity when crossing a ray or sphere cast (i.e. vision)
         let placementMode; //place objects in the scene as navigation obstacles, trigger navmesh rebuilding for agent maneuvering 
 
         //implement above controls with these event listeners
-        let keyDownListener;
-        let keyupListener;
-        let mouseupListener;
-        let mousedownListener;
-        let mousemoveListener;
+        let keyDownListener = (ev) => {};
+        let keyupListener = (ev) => {};
+        let mouseupListener = (ev) => {};
+        let mousedownListener = (ev) => {};
+        let mousemoveListener = (ev) => {};
 
 
         if(physicsPort) {
