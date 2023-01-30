@@ -1225,15 +1225,18 @@ export const babylonRoutes = {
 
         let agentUpdates = {};
         entities.forEach((e,i) => {
-            let agentVelocity = crowd.getAgentNextTargetPath(i).subtract(e.position);
+            let agentVelocity = crowd.getAgentNextTargetPath(i).subtract(e.position).normalize().scaleInPlace(5);
             //let path = crowd.getAgentNextTargetPath(i)
+
+            //braking
+            let dir = e.getDirection(BABYLON.Vector3.Forward());
 
             //todo: enable specific parameters to update accelerations
             let _fps = 1/fps;
             let acceleration = {
-                x:agentVelocity.x*_fps, 
-                y:agentVelocity.y*_fps,
-                z:agentVelocity.z*_fps
+                x:(agentVelocity.x - dir.x)*_fps, 
+                y:(agentVelocity.y - dir.y)*_fps,
+                z:(agentVelocity.z - dir.z)*_fps
             };
 
             // if(needsUpdate) { //provides a stronger direction change impulse
