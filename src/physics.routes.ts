@@ -80,6 +80,13 @@ export const physicsRoutes = {
             } 
         }
 
+
+        if(settings.linearDamping) {
+            rigidbody.setLinearDamping(settings.linearDamping);
+        }
+        if(settings.angularDamping) {
+            rigidbody.setAngularDamping(settings.angularDamping)
+        }
         
         if(settings.position) {
             rigidbody.setTranslation(settings.position,false);
@@ -117,13 +124,6 @@ export const physicsRoutes = {
             );
         }
 
-        if(settings.linearDamping) {
-            rigidbody.setLinearDamping(settings.linearDamping);
-        }
-        if(settings.angularDamping) {
-            rigidbody.setAngularDamping(settings.angularDamping)
-        }
-
         if(!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random()*1000000000000000)}`;
 
         Object.defineProperty(rigidbody, '_id', {value:settings._id, enumerable:true}); //for reference
@@ -145,6 +145,14 @@ export const physicsRoutes = {
     updatePhysicsEntity:function(_id:string,settings:Partial<PhysicsEntityProps>){
         let rigidbody = this.__node.graph.get(_id) as RAPIER.RigidBody;
         if(rigidbody as RAPIER.RigidBody) {
+
+            if(settings.linearDamping) {
+                rigidbody.setLinearDamping(settings.linearDamping);
+            }
+            if(settings.angularDamping) {
+                rigidbody.setAngularDamping(settings.angularDamping)
+            }
+
             if(settings.position) {
                 rigidbody.setTranslation(settings.position,true); //{x,y,z}
             }
@@ -199,13 +207,6 @@ export const physicsRoutes = {
                     settings.angvelocity,
                     true
                 );
-            }
-
-            if(settings.linearDamping) {
-                rigidbody.setLinearDamping(settings.linearDamping);
-            }
-            if(settings.angularDamping) {
-                rigidbody.setAngularDamping(settings.angularDamping)
             }
 
         }

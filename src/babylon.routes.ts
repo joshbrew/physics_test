@@ -182,11 +182,17 @@ export const babylonRoutes = {
 
         let velocity = new BABYLON.Vector3(0,0,0);
 
+
         let rotdefault = BABYLON.Quaternion.RotationAxis(BABYLON.Vector3.Up(), 0); //let's align the mesh so it stands vertical
+        
+        let bb = mesh.getBoundingInfo().boundingBox;
+        mesh.position.y = mesh.position.y - bb.vectors[0].y; //offset mesh position to account for new fixed z rotation
+        
         physics.post('updatePhysicsEntity', [
             meshId, { 
+                position: { x:mesh.position.x, y:mesh.position.y, z:mesh.position.z },
                 rotation:{ x:rotdefault.x, y:rotdefault.y, z:rotdefault.z, w:rotdefault.w},
-                angularDamping:1 //prevent rotation
+                angularDamping:1 //prevent rotation by the physics engine (player-controlled instead)
             } as PhysicsEntityProps])
 
         //various controls
@@ -242,7 +248,7 @@ export const babylonRoutes = {
         let stopRunning = () => { maxSpeed = oldMaxSpeed; }
 
         //look at point of contact
-        let look = () => {
+        let topDownLook = () => {
             let pickResult = scene.pick(scene.pointerX, scene.pointerY);
 
             if(pickResult.pickedPoint) {
@@ -253,6 +259,7 @@ export const babylonRoutes = {
                 physics.post('updatePhysicsEntity', [meshId, { rotation:{ x:rot.x, y:rot.y, z:rot.z, w:rot.w} }])
             }
         };
+        //let firstPersonLook //look at camera controller
 
         let aim;
         let shoot;
@@ -260,11 +267,21 @@ export const babylonRoutes = {
         let placementMode; //place objects in the scene as navigation obstacles, trigger navmesh rebuilding for agent maneuvering 
 
         //implement above controls with these event listeners
-        let keyDownListener = (ev) => {};
-        let keyupListener = (ev) => {};
-        let mouseupListener = (ev) => {};
-        let mousedownListener = (ev) => {};
-        let mousemoveListener = (ev) => {};
+        let keyDownListener = (ev) => {
+
+        };
+        let keyupListener = (ev) => {
+
+        };
+        let mouseupListener = (ev) => {
+
+        };
+        let mousedownListener = (ev) => {
+
+        };
+        let mousemoveListener = (ev) => {
+
+        };
 
 
         if(physicsPort) {
@@ -292,7 +309,7 @@ export const babylonRoutes = {
         if(controls.keyupListener) canvas.removeEventListener('keyup', controls.keyupListener);
         if(controls.mouseupListener) canvas.removeEventListener('mouseup', controls.mouseupListener);
         if(controls.mousedownListener) canvas.removeEventListener('mousedown', controls.mousedownListener);
-        if(controls.mousemoveListener) canvas.removeEventListener('mousedown', controls.mousemoveListener);
+        if(controls.mousemoveListener) canvas.removeEventListener('mousemove', controls.mousemoveListener);
         
         //remove any active controls
         controls.keyupListener({keyCode:87});
