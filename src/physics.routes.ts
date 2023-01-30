@@ -197,14 +197,28 @@ export const physicsRoutes = {
                 )
             }
             if(settings.velocity) {
+
+                let v = rigidbody.linvel();
+
+                if(settings.velocity.x) v.x = settings.velocity.x;
+                if(settings.velocity.y) v.y = settings.velocity.y;
+                if(settings.velocity.z) v.z = settings.velocity.z;
+
                 rigidbody.setLinvel(
-                    settings.velocity,
+                    v,
                     true
                 );
             }
             if(settings.angvelocity) {
+
+                let v = rigidbody.linvel();
+
+                if(settings.angvelocity.x) v.x = settings.angvelocity.x;
+                if(settings.angvelocity.y) v.y = settings.angvelocity.y;
+                if(settings.angvelocity.z) v.z = settings.angvelocity.z;
+
                 rigidbody.setAngvel(
-                    settings.angvelocity,
+                    v,
                     true
                 );
             }
