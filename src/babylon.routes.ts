@@ -184,7 +184,6 @@ export const babylonRoutes = {
 
         let velocity = new BABYLON.Vector3(0,0,0);
 
-
         let rotdefault = BABYLON.Quaternion.RotationAxis(BABYLON.Vector3.Up(), 0); //let's align the mesh so it stands vertical
         
         let bb = mesh.getBoundingInfo().boundingBox;
@@ -208,6 +207,7 @@ export const babylonRoutes = {
             meshId, { 
                 position: { x:mesh.position.x, y:mesh.position.y, z:mesh.position.z },
                 rotation:{ x:rotdefault.x, y:rotdefault.y, z:rotdefault.z, w:rotdefault.w},
+                restitution:0.1,
                 friction:1,
                 angularDamping:10000 //prevent rotation by the physics engine (player-controlled instead)
             } as PhysicsEntityProps]
@@ -1076,11 +1076,13 @@ export const babylonRoutes = {
             let updates = this.__node.graph.run(
                 'animateCrowd',
                 nav,
+                scene,
                 (ctx as WorkerCanvas).crowds[crowdId].crowd,
                 (ctx as WorkerCanvas).crowds[crowdId].entities,
                 tick,
                 engine.getFps(),
-                (ctx as WorkerCanvas).crowds[crowdId].target.position
+                (ctx as WorkerCanvas).crowds[crowdId].target.position,
+                (ctx as WorkerCanvas).crowds[crowdId].target
             );
             tick++;
             //console.log(updates);
@@ -1175,11 +1177,13 @@ export const babylonRoutes = {
     },
     animateCrowd:function( //internal use function, with subscribable outputs on the graph
         nav:BABYLON.RecastJSPlugin,
+        scene:BABYLON.Scene,
         crowd:BABYLON.ICrowd,
         entities:BABYLON.Mesh[],
         tick:number,
         fps:number,
         target?:BABYLON.Vector3,
+        targetMesh?:BABYLON.Mesh
     ) {
 
         let needsUpdate = tick % Math.floor(fps*.3) === 0;
@@ -1191,7 +1195,27 @@ export const babylonRoutes = {
             });
 
             if(target) {
-                let point = nav.getClosestPoint(target);
+
+                let pick = () => {
+                    if(!targetMesh) return;
+                    let direction = BABYLON.Vector3.Down();
+                    let picked = scene.pickWithRay(
+                        new BABYLON.Ray(targetMesh.position, direction), 
+                        (m) => { if(m.id === targetMesh.id) return false; else return true;}
+                    );
+                   
+                    return picked;
+                }
+
+                let point;
+                if(targetMesh) {
+                    const picked = pick();
+                    if(picked?.pickedPoint) {
+                        point = nav.getClosestPoint(picked.pickedPoint); //projected point
+                    }
+                }
+                else point = nav.getClosestPoint(target);
+
                 entities.forEach((e, i) => {crowd.agentGoto(i, point); });
             }
         
