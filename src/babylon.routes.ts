@@ -212,6 +212,7 @@ export const babylonRoutes = {
 
         //attach the camera to the mesh
         const camera = ctx.camera as BABYLON.FreeCamera;
+        let cameraobs: BABYLON.Observer<BABYLON.Scene>;
         if(camera) {
 
             camera.position = mesh.position.add(new BABYLON.Vector3(0, 40, -3));
@@ -219,9 +220,11 @@ export const babylonRoutes = {
             
             camera.setTarget(mesh.position);
 
-            let cameraobs = scene.onBeforeRenderObservable.add(() => {
+            let obs = scene.onBeforeRenderObservable.add(() => {
                 camera.position = mesh.position.add(new BABYLON.Vector3(0, 40, -3));
-            })
+            });
+
+            cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
         }
         
         physics.post('updatePhysicsEntity', [
@@ -405,13 +408,18 @@ export const babylonRoutes = {
         canvas.addEventListener('mouseup', mouseupListener);
         canvas.addEventListener('mousemove', mousemoveListener);
 
+        let __ondisconnected = () => {
+            scene.onBeforeRenderObservable.remove(cameraobs);
+        }
+
         return {
             mode:'player',
             keydownListener,
             keyupListener,
             mousedownListener,
             mouseupListener,
-            mousemoveListener
+            mousemoveListener,
+            __ondisconnected
         }; //controls you can pop off the canvas
 
 
@@ -444,14 +452,18 @@ export const babylonRoutes = {
         if(controls.mousemoveListener) canvas.removeEventListener('mousemove', controls.mousemoveListener);
         
         //remove any active controls
-        controls.keyupListener({keyCode:87});
-        controls.keyupListener({keyCode:65});
-        controls.keyupListener({keyCode:83});
-        controls.keyupListener({keyCode:68});
-        controls.keyupListener({keyCode:16});
-        controls.keyupListener({keyCode:17});
-        controls.keyupListener({keyCode:32});
-        controls.mouseupListener();
+        if(controls.keyupListener){
+            controls.keyupListener({keyCode:87});
+            controls.keyupListener({keyCode:65});
+            controls.keyupListener({keyCode:83});
+            controls.keyupListener({keyCode:68});
+            controls.keyupListener({keyCode:16});
+            controls.keyupListener({keyCode:17});
+            controls.keyupListener({keyCode:32});
+        }
+        if(controls.mouseupListener) controls.mouseupListener();
+
+        if(controls.__ondisconnected) controls.__ondisconnected();
 
         ctx.controls = null;
 
