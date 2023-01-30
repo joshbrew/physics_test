@@ -256,7 +256,6 @@ export const babylonRoutes = {
                         velocity.addInPlace(v.scaleInPlace(maxSpeed));
                         physics.post('updatePhysicsEntity', [meshId, { velocity:{ y:velocity.y} }]);
                         
-
                         let jumping = () => {
                             let picked = pick();
                             if(picked) {
@@ -992,7 +991,6 @@ export const babylonRoutes = {
 
         const scene = ctx.scene;
 
-
         let navmeshdebug = new BABYLON.Mesh('navDebugMesh', scene);
         
         navmeshdebug.setVerticesData(BABYLON.VertexBuffer.PositionKind, data);
@@ -1224,12 +1222,18 @@ export const babylonRoutes = {
         crowd.update(1/fps);
 
         let agentUpdates = {};
+
+
         entities.forEach((e,i) => {
-            let agentVelocity = crowd.getAgentNextTargetPath(i).subtract(e.position).normalize().scaleInPlace(5);
+            let path = crowd.getAgentNextTargetPath(i);
+            let agentVelocity = path.subtract(e.position).normalize().scaleInPlace(4);
             //let path = crowd.getAgentNextTargetPath(i)
 
             //braking
-            let dir = e.getDirection(BABYLON.Vector3.Forward());
+            let dir: BABYLON.Vector3;
+            if(e.rotationQuaternion) dir = e.rotationQuaternion?.toEulerAngles();
+            else dir = e.rotation;
+            
 
             //todo: enable specific parameters to update accelerations
             let _fps = 1/fps;
