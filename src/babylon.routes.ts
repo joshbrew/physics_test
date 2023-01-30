@@ -202,22 +202,22 @@ export const babylonRoutes = {
         //various controls
         let forward = () => {
             let v = globalDirection ? BABYLON.Vector3.Forward() : mesh.getDirection(BABYLON.Vector3.Forward());
-            velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
+            velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
         let backward = () => {
             let v = globalDirection ? BABYLON.Vector3.Backward() : mesh.getDirection(BABYLON.Vector3.Backward());
-            velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
+            velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
         let left = () => {
             let v = globalDirection ? BABYLON.Vector3.Left() : mesh.getDirection(BABYLON.Vector3.Left());
-            velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
+            velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
         let right = () => {
             let v = globalDirection ? BABYLON.Vector3.Right() : mesh.getDirection(BABYLON.Vector3.Right());
-            velocity.addInPlace(v).normalize().scaleInPlace(maxSpeed);
+            velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
 
