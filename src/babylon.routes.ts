@@ -210,10 +210,31 @@ export const babylonRoutes = {
             velocity.addInPlace(v).normalize().scale(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, y:velocity.y, z:velocity.z} }])
         };
+
+        let jumped = false;
         let jump = () => {
-            let v = BABYLON.Vector3.Up();
-            velocity.addInPlace(v.scale(maxSpeed));
-            physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, y:velocity.y, z:velocity.z} }])
+            
+            if(!jumped) {
+                let v = BABYLON.Vector3.Up();
+                velocity.addInPlace(v.scale(maxSpeed));
+                physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, y:velocity.y, z:velocity.z} }]);
+                  
+                let boundingBox = mesh.getBoundingInfo().boundingBox;
+
+                let jumping = () => {
+                    let direction = BABYLON.Vector3.Down();
+                    let picked = scene.pickWithRay(new BABYLON.Ray(boundingBox.vectors[0], direction), (m) => { if(m.id === mesh.id) return false; else return true;});
+                    if(picked) {
+
+                        if(picked.distance < 0.1) {
+                            jumped = false; //can jump again
+                            return;
+                        }
+                    }
+                    setTimeout(jumping, 50); //keep checking if we can jump again
+                }
+                jumping();
+            }
         };
 
         let oldMaxSpeed = maxSpeed;
@@ -251,29 +272,6 @@ export const babylonRoutes = {
         }
 
     },
-    attachFreeCamera:function (
-        ctx?:string|WorkerCanvas
-    ) {
-
-        if(!ctx || typeof ctx === 'string')
-            ctx = this.__node.graph.run('getCanvas',ctx);
-
-        if(typeof ctx !== 'object') return undefined;
-
-        const scene = ctx.scene as BABYLON.Scene;
-
-        const camera = new BABYLON.FreeCamera(
-            'camera', 
-            new BABYLON.Vector3(-20,10,0), 
-            scene
-        );
-
-        //camera.attachControl(canvas, false);
-
-        camera.setTarget(new BABYLON.Vector3(0,0,0));
-
-        return camera;
-    },
     removeControls:function(
         controls?:any, 
         ctx?:string|WorkerCanvas
@@ -307,6 +305,29 @@ export const babylonRoutes = {
 
         ctx.controls = null;
 
+    },
+    attachFreeCamera:function (
+        ctx?:string|WorkerCanvas
+    ) {
+
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+
+        const scene = ctx.scene as BABYLON.Scene;
+
+        const camera = new BABYLON.FreeCamera(
+            'camera', 
+            new BABYLON.Vector3(-20,10,0), 
+            scene
+        );
+
+        //camera.attachControl(canvas, false);
+
+        camera.setTarget(new BABYLON.Vector3(0,0,0));
+
+        return camera;
     },
     addCameraControls:function(
         speed=0.5,
