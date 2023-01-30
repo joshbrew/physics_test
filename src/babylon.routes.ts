@@ -189,6 +189,20 @@ export const babylonRoutes = {
         
         let bb = mesh.getBoundingInfo().boundingBox;
         mesh.position.y = mesh.position.y - bb.vectors[0].z*0.5; //offset mesh position to account for new fixed z rotation
+
+        //attach the camera to the mesh
+        const camera = ctx.camera as BABYLON.FreeCamera;
+        if(camera) {
+
+            camera.position = mesh.position.add(new BABYLON.Vector3(0, 40, -3));
+            camera.rotation = new BABYLON.Vector3(0, 0, Math.PI);
+            
+            camera.setTarget(mesh.position);
+
+            let cameraobs = scene.onBeforeRenderObservable.add(() => {
+                camera.position = mesh.position.add(new BABYLON.Vector3(0, 40, -3));
+            })
+        }
         
         physics.post('updatePhysicsEntity', [
             meshId, { 
