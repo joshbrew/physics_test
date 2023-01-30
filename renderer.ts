@@ -109,7 +109,7 @@ export async function createRenderer(
 
     physics.run('initWorld', [
         entities, 
-        { x: 0.0, y: -9.81, z:0 }
+        { x: 0.0, y: -9.81, z:0 } //down is the y-axis in babylon
     ]).then(async () => {
 
         node.renderer = await graph.run( 
@@ -120,8 +120,10 @@ export async function createRenderer(
                 context:undefined,
                 _id,
                 entities,
+                //port Ids
                 physicsPort,
-                navPort
+                navPort,
+                navPhysicsPort
             },
             'receiveBabylonCanvas'
         ) as WorkerCanvasControls;
@@ -190,8 +192,13 @@ export function addEntity(settings:PhysicsEntityProps, ctx:any) {
     if(settings.navMesh) {
         (ctx.navigation as WorkerInfo).post('addToNavMesh', [settings._id, settings.navMesh, ctx._id]);
     }
+    
+    if(settings.collisionType) {
+        
+        (ctx.physics as WorkerInfo).post('addToNavMesh', settings);
+    }
 }
 
 export function removeEntity(id:string, ctx:any) {
-    (ctx.renderer as WorkerInfo).post('removeBabylonEntity', [id]); //will trigger the rest of the threads
+    (ctx.renderer as WorkerInfo).post('removeBabylonEntity', id); //will trigger the rest of the threads
 }

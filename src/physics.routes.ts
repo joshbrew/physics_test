@@ -12,7 +12,9 @@ export const physicsRoutes = {
                 (this.__node.graph as WorkerService).world = new RAPIER.World(gravity,...args);
                 if(entities) {
                     let tags = entities.map((props) => {
-                        return this.__node.graph.run('addPhysicsEntity', props);
+                        if(props.collisionType)
+                            return this.__node.graph.run('addPhysicsEntity', props);
+                        else return undefined;
                     });
                     res(tags);
                 }
@@ -23,6 +25,9 @@ export const physicsRoutes = {
     addPhysicsEntity:function (
         settings:PhysicsEntityProps
     ) {
+
+        if(!settings.collisionType) return undefined;
+
         let rtype = settings.dynamic ? RAPIER.RigidBodyType.Dynamic : RAPIER.RigidBodyType.Fixed; //also kinematic types, need to learn what those do
         
         let desc = new RAPIER.RigidBodyDesc(
@@ -324,26 +329,37 @@ export const physicsRoutes = {
     sphereCast:function( //cast a sphere and collect collision information. More robust but less performant than raycasting
         radius:number=1, 
         startPos:Vec3, 
-        velocity:Vec3,
-        maxToI:number=0.1,
+        direction:Vec3, //conforms more with babylonjs
+        length:number,
         withCollision:(collision:RAPIER.ShapeColliderTOI) => void, //deal with the collision, does not return multiple collisions, use sphereIntersections for tha, e.g. chaining these commands using the witness vector
+        filterCollider?:(colliderHandle:number) => boolean, //return true to continue the sphere cast with the previous closest collider filtered, the cast only returns the first acceptable hit
         stopAtPenetration:boolean = true,
         filterFlags?:RAPIER.QueryFilterFlags,
         filterGroups?:number,
         filterExcludeCollider?:number,
-        filterExcludeRigidBody?:number,
-        filterPredicate?:(colliderHandle:number) => boolean //return true to continue the sphere cast with the previous closest collider filtered
+        filterExcludeRigidBody?:number
     ) {
         const world = this.__node.graph.world as RAPIER.World;
 
         if(!world) return;
 
-        const query = new RAPIER.QueryPipeline();
+        if(!this.__node.graph.worldQuery) this.__node.graph.worldQuery = new RAPIER.QueryPipeline();
+        const query = this.__node.graph.worldQuery;
 
         const sphere = new RAPIER.Ball(radius);
 
         query.update(world.islands, world.bodies, world.colliders);
 
+        let toi = 0.01;
+        let _toi = 1/toi;
+
+        let velocity = { 
+            x:length*direction.x*_toi, 
+            y:length*direction.y*_toi, 
+            z:length*direction.z*_toi
+        };
+
+        //returns first collision
         let colliding = query.castShape(
             world.bodies,
             world.colliders,
@@ -351,13 +367,13 @@ export const physicsRoutes = {
             new RAPIER.Quaternion(0,0,0,1),
             velocity,
             sphere,
-            maxToI ? maxToI : 0.1,
+            toi,
             stopAtPenetration,
             filterFlags,
             filterGroups,
             filterExcludeCollider,
             filterExcludeRigidBody,
-            filterPredicate
+            filterCollider
         );
 
         if(colliding) withCollision(colliding);
@@ -369,19 +385,20 @@ export const physicsRoutes = {
     },
     sphereIntersections:function( //find all colliders intersecting a sphere of a given radius and position
         radius:number, 
-        startPos:Vec3, 
-        intersects:(collider:RAPIER.Collider) => boolean, //return true or false to stop iterating
+        position:Vec3, 
+        intersects:(collider?:RAPIER.RigidBody|null) => boolean, //return true or false to stop iterating
+        filterCollider?:(colliderHandle:number) => boolean, //return true to call the intersection function
         filterFlags?:RAPIER.QueryFilterFlags,
         filterGroups?:number,
         filterExcludeCollider?:number,
         filterExcludeRigidBody?:number,
-        filterPredicate?:(colliderHandle:number) => boolean //return true to continue the sphere cast with the previous closest collider filtered
     ) {
         const world = this.__node.graph.world as RAPIER.World;
 
         if(!world) return;
 
-        const query = new RAPIER.QueryPipeline();
+        if(!this.__node.graph.worldQuery) this.__node.graph.worldQuery = new RAPIER.QueryPipeline();
+        const query = this.__node.graph.worldQuery;
 
         const sphere = new RAPIER.Ball(radius);
 
@@ -392,18 +409,18 @@ export const physicsRoutes = {
         query.intersectionsWithShape(
             world.bodies,
             world.colliders,
-            startPos,
+            position,
             new RAPIER.Quaternion(0,0,0,1),
             sphere,
             (handle) => {
                 if(!anyIntersection) anyIntersection = true;
-                return intersects(world.colliders.get(handle) as RAPIER.Collider);
+                return intersects(world.colliders.get(handle)?.parent());
             },
             filterFlags,
             filterGroups,
             filterExcludeCollider,
             filterExcludeRigidBody,
-            filterPredicate
+            filterCollider
         );
         
         query.free();

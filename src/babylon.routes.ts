@@ -5,7 +5,7 @@ import {
     WorkerCanvas, 
     isTypedArray, 
     WorkerInfo,
-    WorkerService
+    WorkerService,
 } from 'graphscript'
 
 import * as BABYLON from 'babylonjs'
@@ -71,7 +71,6 @@ export const babylonRoutes = {
                 });
 
                 setTimeout(() => { engine.setSize(canvas.clientWidth,canvas.clientHeight);  }, 100);
-
 
                 const light = new BABYLON.SpotLight(
                     'light1', 
@@ -159,6 +158,28 @@ export const babylonRoutes = {
             return names;
         }
 
+    },
+    //can also use physics thread to sphere cast/get intersections
+    rayCast: function (
+        origin:BABYLON.Vector3, 
+        direction:BABYLON.Vector3, 
+        length?:number, 
+        filter?:(mesh:BABYLON.AbstractMesh)=>boolean, 
+        scene?:BABYLON.Scene, 
+        ctx?:string|WorkerCanvas
+    ) {
+        //attach user to object and add controls for moving the object around
+        if(!scene) {
+            if(!ctx || typeof ctx === 'string')
+                ctx = this.__node.graph.run('getCanvas',ctx);
+    
+            if(typeof ctx !== 'object') return undefined;
+
+            scene = ctx.scene;
+
+        }
+
+        return scene?.pickWithRay(new BABYLON.Ray(origin,direction,length), filter);
     },
     addPlayerControls:function(
         meshId:string,
@@ -427,6 +448,7 @@ export const babylonRoutes = {
         controls.keyupListener({keyCode:65});
         controls.keyupListener({keyCode:83});
         controls.keyupListener({keyCode:68});
+        controls.keyupListener({keyCode:16});
         controls.keyupListener({keyCode:17});
         controls.keyupListener({keyCode:32});
         controls.mouseupListener();
@@ -475,22 +497,22 @@ export const babylonRoutes = {
         if(!camera) return undefined;
 
         let w = () => {
-            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Forward().scale(camera.speed)))
+            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Forward().scaleInPlace(camera.speed)))
         }
         let a = () => {
-            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Left().scale(camera.speed)))
+            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Left().scaleInPlace(camera.speed)))
         }
         let s = () => {
-            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Backward().scale(camera.speed)))
+            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Backward().scaleInPlace(camera.speed)))
         }
         let d = () => {
-            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Right().scale(camera.speed)))
+            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Right().scaleInPlace(camera.speed)))
         }
         let ctrl = () => {
-            camera.position.addInPlace(BABYLON.Vector3.Down().scale(camera.speed))
+            camera.position.addInPlace(BABYLON.Vector3.Down().scaleInPlace(camera.speed))
         }
         let space = () => {
-            camera.position.addInPlace(BABYLON.Vector3.Up().scale(camera.speed))
+            camera.position.addInPlace(BABYLON.Vector3.Up().scaleInPlace(camera.speed))
         }
 
         let wobserver, aobserver, sobserver, dobserver, ctrlobserver, spaceobserver;
@@ -1255,4 +1277,34 @@ export const babylonRoutes = {
         return agentUpdates;
         //this.__node.graph.workers[portId]?.post('updatePhysicsEntity', [entity.id,agentUpdates[entity.id]]);
     },
+    addEntity: function (settings:PhysicsEntityProps, ctx?:string|WorkerCanvas) {
+
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+        
+        if(!settings._id) settings._id = `entity${Math.floor(Math.random()*1000000000000000)}`; //consistent Ids are necessary to track across threads
+    
+        this.__node.graph.run('loadBabylonEntity', settings, ctx);
+
+        let physicsWorker = this.__node.graph.workers[ctx.physicsPort];
+        let navWorker = this.__node.graph.workers[ctx.navPort];
+
+        if(physicsWorker) {
+            (navWorker as WorkerInfo).post('addPhysicsEntity', settings);
+        }
+        if(navWorker) {
+            (navWorker as WorkerInfo).post('loadBabylonEntity', [settings, ctx._id]); //duplicate entities for the crowd navigation thread e.g. to add agents, obstacles, etc.
+            if(settings.crowd) {
+                (navWorker as WorkerInfo).post('addCrowdAgent', [settings._id, settings.crowd, ctx._id]);
+            }
+            if(settings.targetOf) {
+                (navWorker as WorkerInfo).post('setCrowdTarget', [settings._id, settings.targetOf, ctx._id]);
+            }
+            if(settings.navMesh) {
+                (navWorker as WorkerInfo).post('addToNavMesh', [settings._id, settings.navMesh, ctx._id]);
+            }
+        }
+    }
 }
