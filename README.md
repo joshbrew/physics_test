@@ -2,9 +2,14 @@
  Rapier3D + BablyonJS test
 
 ### To run:
+
+First ensure the navmesh worker is built with with `npm start`
+
+Then after you can just do:
+
 `tinybuild`
 
-or `npm i -g tinybuild & tinybuild` if you don't have it installed.
+`npm i -g tinybuild & tinybuild` if you don't have [tinybuild](https://github.com/brainsatplay/tinybuild) installed.
 
 ### About
 Rapier3D: fancy Rust -> JS WASM physics engine, it's faster than anything else free.
