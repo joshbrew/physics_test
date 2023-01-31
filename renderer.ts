@@ -42,7 +42,7 @@ export async function createRenderer(
         physics.worker
     );
 
-    //the navigation algorithm will update accelerations on the physics thread
+    //the navigation algorithm will update acceaaalerations on the physics thread
     const navPort = graph.establishMessageChannel(
         renderer.worker,
         navigation.worker
@@ -56,9 +56,13 @@ export async function createRenderer(
     node.physics = physics;
     node.navigation = navigation;
 
-    // elm.addEventListener('click', () => {
-    //     elm.requestPointerLock();
+    // elm.addEventListener("click", async () => {
+    //     await elm.requestPointerLock();
     // });
+
+    window.addEventListener('mousemove', (ev) => {
+        console.log(ev);
+    });
 
     let _id = elm.id ? elm.id : `renderer${Math.floor(Math.random()*1000000000000000)}`;
 

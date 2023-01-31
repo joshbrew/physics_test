@@ -61,7 +61,7 @@ export const babylonRoutes = {
 
                     if(picked.pickedMesh?.name === 'capsule1' && self.controls?.mode !== 'player') {
                         if(self.controls) this.__node.graph.run('removeControls', self.controls, self);
-                        self.controls = this.__node.graph.run('addPlayerControls', 'capsule1', self.physicsPort, 2, true)
+                            self.controls =this.__node.graph.run('addPlayerControls', 'capsule1', self.physicsPort, 2, 'firstperson', false);
                         //console.log(picked.pickedMesh);
                     } 
                     else if(!self.controls) {
@@ -185,6 +185,7 @@ export const babylonRoutes = {
         meshId:string,
         physicsPort:string,
         maxSpeed:number=0.5,
+        cameraMode:'topdown'|'firstperson'='topdown',
         globalDirection?:boolean,
         ctx?:string|WorkerCanvas
     ) {
@@ -213,21 +214,8 @@ export const babylonRoutes = {
         //attach the camera to the mesh
         const camera = ctx.camera as BABYLON.FreeCamera;
         let cameraobs: BABYLON.Observer<BABYLON.Scene>;
-        if(camera) {
-
-            camera.position = mesh.position.add(new BABYLON.Vector3(0, 40, -3));
-            camera.rotation = new BABYLON.Vector3(0, 0, Math.PI);
-            
-            camera.setTarget(mesh.position);
-
-            let obs = scene.onBeforeRenderObservable.add(() => {
-                camera.position = mesh.position.add(new BABYLON.Vector3(0, 40, -3));
-            });
-
-            cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
-        }
         
-        physics.post('updatePhysicsEntity', [
+        physics.run('updatePhysicsEntity', [
             meshId, { 
                 position: { x:mesh.position.x, y:mesh.position.y, z:mesh.position.z },
                 rotation:{ x:rotdefault.x, y:rotdefault.y, z:rotdefault.z, w:rotdefault.w},
@@ -237,6 +225,32 @@ export const babylonRoutes = {
             } as PhysicsEntityProps]
         );
 
+        if(camera) {
+
+            if(cameraMode === 'topdown') {
+                camera.position = mesh.position.add(new BABYLON.Vector3(0, 40, -3));
+                camera.rotation = new BABYLON.Vector3(0, 0, Math.PI);
+                
+                camera.setTarget(mesh.position);
+
+                let obs = scene.onBeforeRenderObservable.add(() => {
+                    camera.position = mesh.position.add(new BABYLON.Vector3(0, 40, -3));
+                });
+
+                cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
+            }
+            else if(cameraMode === 'firstperson') {
+                camera.position = mesh.position//.add(new BABYLON.Vector3(0, 1, 0));
+                camera.rotation = rotdefault.toEulerAngles();
+                camera.rotation.y = 1;
+                
+                let obs = scene.onBeforeRenderObservable.add(() => {
+                    camera.position = mesh.position//.add(new BABYLON.Vector3(0, 1, 0));
+                });
+
+                cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
+            }
+        }
         //various controls
         let forward = () => {
             let v = globalDirection ? BABYLON.Vector3.Forward() : mesh.getDirection(BABYLON.Vector3.Forward());
@@ -288,7 +302,7 @@ export const babylonRoutes = {
                                     return;
                                 }
                             }
-                            setTimeout(jumping, 50); //keep checking if we can jump again
+                            requestAnimationFrame(jumping); //keep checking if we can jump again
                         }
                         jumping();
                     }
@@ -302,8 +316,8 @@ export const babylonRoutes = {
         let normalSpeed = () => { maxSpeed = oldMaxSpeed; }
 
         //look at point of contact
-        let topDownLook = () => {
-            let pickResult = scene.pick(scene.pointerX, scene.pointerY);
+        let topDownLook = (ev) => {
+            let pickResult = scene.pick(ev.clientX, ev.clientY);
 
             if(pickResult.pickedPoint) {
                 var diffX = pickResult.pickedPoint.x - mesh.position.x;
@@ -314,6 +328,24 @@ export const babylonRoutes = {
             }
         };
         //let firstPersonLook //look at camera controller
+        let lastMouseMove;
+        let sensitivity = 4;
+        let fpsLook = (ev) => {
+            if(lastMouseMove) {
+                let dMouseX = ev.clientX - lastMouseMove.clientX;
+                let dMouseY = ev.clientY - lastMouseMove.clientY;
+
+                camera.rotation.y += sensitivity*dMouseX/canvas.width; 
+                camera.rotation.x += sensitivity*dMouseY/canvas.height;
+
+                let direction = camera.getDirection(BABYLON.Vector3.Forward());
+                direction.y = 1;
+                let theta = Math.atan2(direction.x,direction.z);
+                let rot = BABYLON.Quaternion.RotationAxis(BABYLON.Vector3.Up(), theta);
+                physics.post('updatePhysicsEntity', [meshId, { rotation:{ x:rot.x, y:rot.y, z:rot.z, w:rot.w} }])
+            }
+            lastMouseMove = ev;
+        }
 
         let aim;
         let shoot;
@@ -346,6 +378,7 @@ export const babylonRoutes = {
                 if(!spaceobserver) spaceobserver = scene.onBeforeRenderObservable.add(jump);
             }
         };
+        
         let keyupListener = (ev) => {
             if(ev.keyCode === 87 || ev.keycode === 38) {
                 if(wobserver) {
@@ -399,7 +432,8 @@ export const babylonRoutes = {
 
         };
         let mousemoveListener = (ev) => {
-            topDownLook();
+            if(cameraMode === 'topdown') topDownLook(ev);
+            else if (cameraMode === 'firstperson') fpsLook(ev);
         };
 
         canvas.addEventListener('keydown', keydownListener);
@@ -409,7 +443,16 @@ export const babylonRoutes = {
         canvas.addEventListener('mousemove', mousemoveListener);
 
         let __ondisconnected = () => {
-            scene.onBeforeRenderObservable.remove(cameraobs);
+            if(cameraobs) scene.onBeforeRenderObservable.remove(cameraobs);
+
+            //reset entity properties, could e.g. trigger ragdoll mode 
+            physics.post('updatePhysicsEntity', [
+                meshId, { 
+                    restitution:0.5,
+                    //friction:0,
+                    angularDamping:0 
+                } as PhysicsEntityProps]
+            );
         }
 
         return {
@@ -1296,9 +1339,7 @@ export const babylonRoutes = {
 
         if(typeof ctx !== 'object') return undefined;
         
-        if(!settings._id) settings._id = `entity${Math.floor(Math.random()*1000000000000000)}`; //consistent Ids are necessary to track across threads
-    
-        this.__node.graph.run('loadBabylonEntity', settings, ctx);
+        settings._id = this.__node.graph.run('loadBabylonEntity', settings, ctx);
 
         let physicsWorker = this.__node.graph.workers[ctx.physicsPort];
         let navWorker = this.__node.graph.workers[ctx.navPort];

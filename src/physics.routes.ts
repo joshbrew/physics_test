@@ -228,6 +228,7 @@ export const physicsRoutes = {
                 );
             }
 
+            return true;
         }
     },
     updatePhysicsEntities:function(updates:{[key:string]:Partial<PhysicsEntityProps>}|number[]) {
