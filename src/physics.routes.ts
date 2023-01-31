@@ -39,7 +39,7 @@ export const physicsRoutes = {
         )
 
         let collider: RAPIER.ColliderDesc | undefined;
-        if(settings.collisionTypeParams) {
+        if(settings.collisionTypeParams) { //use this generically to set up collisions
             //@ts-ignore //fuk u tuples
             collider = RAPIER.ColliderDesc[settings.collisionType](...settings.collisionTypeParams) as ColliderDesc;
         } else if (settings.collisionType === 'ball') {
@@ -51,7 +51,10 @@ export const physicsRoutes = {
             );
         } else if (settings.collisionType === 'cuboid') {
             if(settings.dimensions) 
-                collider = RAPIER.ColliderDesc.cuboid(settings.dimensions.width*.5, settings.dimensions.height*.5, settings.dimensions.depth*.5);
+                collider = RAPIER.ColliderDesc.cuboid(
+                    settings.dimensions.width ? settings.dimensions.width*.5 : 0.5, 
+                    settings.dimensions.height ? settings.dimensions.height*.5 : 0.5, 
+                    settings.dimensions.depth ? settings.dimensions.depth*.5 : 0.5);
             else 
                 collider = RAPIER.ColliderDesc.cuboid(0.5,0.5,0.5);
         }
@@ -175,7 +178,10 @@ export const physicsRoutes = {
             }
             if(settings.mass) {
                 rigidbody.collider(0).setMass(settings.mass);
-            } else rigidbody.collider(0).setMass(1);
+            } 
+            if(settings.friction) {
+                rigidbody.collider(0).setFriction(settings.friction);
+            }
             
             if(settings.centerOfMass) {
                 rigidbody.collider(0).setMassProperties(

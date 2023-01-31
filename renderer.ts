@@ -60,9 +60,10 @@ export async function createRenderer(
     //     await elm.requestPointerLock();
     // });
 
-    window.addEventListener('mousemove', (ev) => {
-        console.log(ev);
-    });
+    // window.addEventListener('keydown', (ev) => {
+    //     ev.preventDefault();
+    //     //console.log(ev);
+    // });
 
     let _id = elm.id ? elm.id : `renderer${Math.floor(Math.random()*1000000000000000)}`;
 

@@ -61,7 +61,7 @@ export const babylonRoutes = {
 
                     if(picked.pickedMesh?.name === 'capsule1' && self.controls?.mode !== 'player') {
                         if(self.controls) this.__node.graph.run('removeControls', self.controls, self);
-                            self.controls =this.__node.graph.run('addPlayerControls', 'capsule1', self.physicsPort, 2, 'firstperson', false);
+                            self.controls =this.__node.graph.run('addPlayerControls', 'capsule1', self.physicsPort, 2, 'topdown', true);
                         //console.log(picked.pickedMesh);
                     } 
                     else if(!self.controls) {
@@ -185,8 +185,8 @@ export const babylonRoutes = {
         meshId:string,
         physicsPort:string,
         maxSpeed:number=0.5,
-        cameraMode:'topdown'|'firstperson'='topdown',
-        globalDirection?:boolean,
+        cameraMode:'topdown'|'firstperson'|'thirdperson'='topdown',
+        globalDirection:boolean=false,
         ctx?:string|WorkerCanvas
     ) {
         //attach user to object and add controls for moving the object around
@@ -220,7 +220,8 @@ export const babylonRoutes = {
                 position: { x:mesh.position.x, y:mesh.position.y, z:mesh.position.z },
                 rotation:{ x:rotdefault.x, y:rotdefault.y, z:rotdefault.z, w:rotdefault.w},
                 restitution:0.1,
-                friction:1,
+                mass:100,
+                //friction:0.2,
                 angularDamping:10000 //prevent rotation by the physics engine (player-controlled instead)
             } as PhysicsEntityProps]
         );
@@ -228,13 +229,13 @@ export const babylonRoutes = {
         if(camera) {
 
             if(cameraMode === 'topdown') {
-                camera.position = mesh.position.add(new BABYLON.Vector3(0, 40, -3));
+                camera.position = mesh.position.add(new BABYLON.Vector3(0, 20, -8));
                 camera.rotation = new BABYLON.Vector3(0, 0, Math.PI);
                 
                 camera.setTarget(mesh.position);
 
                 let obs = scene.onBeforeRenderObservable.add(() => {
-                    camera.position = mesh.position.add(new BABYLON.Vector3(0, 40, -3));
+                    camera.position = mesh.position.add(new BABYLON.Vector3(0, 20, -8));
                 });
 
                 cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
@@ -246,6 +247,21 @@ export const babylonRoutes = {
                 
                 let obs = scene.onBeforeRenderObservable.add(() => {
                     camera.position = mesh.position//.add(new BABYLON.Vector3(0, 1, 0));
+                });
+
+                cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
+            }
+            else if (cameraMode === 'thirdperson') {
+                camera.position = mesh.position.subtract(mesh.getDirection(BABYLON.Vector3.Forward()).scaleInPlace(4).subtract(mesh.getDirection(BABYLON.Vector3.Left()).scaleInPlace(1.5)));
+                camera.position.y += 2.5;
+                camera.rotation = rotdefault.toEulerAngles();
+                camera.rotation.y = 1;
+                
+                let obs = scene.onBeforeRenderObservable.add(() => {
+                    if(cameraMode === 'thirdperson') {
+                        camera.position = mesh.position.subtract(mesh.getDirection(BABYLON.Vector3.Forward()).scaleInPlace(4).subtract(mesh.getDirection(BABYLON.Vector3.Left()).scaleInPlace(1.5)));
+                        camera.position.y += 2.5;
+                    }
                 });
 
                 cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
@@ -328,12 +344,10 @@ export const babylonRoutes = {
             }
         };
         //let firstPersonLook //look at camera controller
-        let lastMouseMove;
         let sensitivity = 4;
         let fpsLook = (ev) => {
-            if(lastMouseMove) {
-                let dMouseX = ev.clientX - lastMouseMove.clientX;
-                let dMouseY = ev.clientY - lastMouseMove.clientY;
+                let dMouseX = ev.movementX;
+                let dMouseY = ev.movementY;
 
                 camera.rotation.y += sensitivity*dMouseX/canvas.width; 
                 camera.rotation.x += sensitivity*dMouseY/canvas.height;
@@ -341,10 +355,9 @@ export const babylonRoutes = {
                 let direction = camera.getDirection(BABYLON.Vector3.Forward());
                 direction.y = 1;
                 let theta = Math.atan2(direction.x,direction.z);
+
                 let rot = BABYLON.Quaternion.RotationAxis(BABYLON.Vector3.Up(), theta);
-                physics.post('updatePhysicsEntity', [meshId, { rotation:{ x:rot.x, y:rot.y, z:rot.z, w:rot.w} }])
-            }
-            lastMouseMove = ev;
+                physics.post('updatePhysicsEntity', [meshId, { rotation:{ x:rot.x, y:rot.y, z:rot.z, w:rot.w} }]);
         }
 
         let aim;
@@ -433,7 +446,7 @@ export const babylonRoutes = {
         };
         let mousemoveListener = (ev) => {
             if(cameraMode === 'topdown') topDownLook(ev);
-            else if (cameraMode === 'firstperson') fpsLook(ev);
+            else fpsLook(ev);
         };
 
         canvas.addEventListener('keydown', keydownListener);
@@ -690,6 +703,7 @@ export const babylonRoutes = {
 
         let entity: BABYLON.Mesh | undefined;
         //limited settings rn for simplicity to work with the physics engine
+        
         if(settings.collisionType === 'ball') {
             if(!settings._id) settings._id = `ball${Math.floor(Math.random()*1000000000000000)}`
             
@@ -728,7 +742,21 @@ export const babylonRoutes = {
                 } : {width:1,height:1,depth:1},
                 scene
             );
-        }
+        } else if(settings.collisionType === 'cylinder') {
+            if(!settings._id) settings._id = `cylinder${Math.floor(Math.random()*1000000000000000)}`;
+            entity = BABYLON.MeshBuilder.CreateCylinder(settings._id, { 
+                height: settings.dimensions?.height ? settings.dimensions.height : 1, 
+                diameter: settings.radius ? settings.radius*2 : 1,
+                tessellation: 12
+            })
+        } else if (settings.collisionType === 'cone') {
+            entity = BABYLON.MeshBuilder.CreateCylinder(settings._id, { 
+                height: settings.dimensions?.height ? settings.dimensions.height : 1, 
+                diameter: settings.radius ? settings.radius*2 : 1,
+                tessellation: 12,
+                diameterTop:0
+            })
+        } 
 
         if(entity) {
 
@@ -753,8 +781,18 @@ export const babylonRoutes = {
                 (ctx.shadowGenerator as BABYLON.ShadowGenerator).addShadowCaster(entity);
             }
         
+            let node = (this.__node.graph as WorkerService).add(
+                {
+                    __node:{ tag:settings._id },
+                    __ondisconnected:function (node) {
+                        this.__node.graph.run('removeBabylonEntity', settings._id, ctx);
+                    }
+                }
+            );
+
+            node.__proxyObject(entity);
         }
-        
+
         return settings._id;
     },
     updateBabylonEntities:function(
@@ -833,6 +871,10 @@ export const babylonRoutes = {
         // const engine = ctx.engine as BABYLON.Engine;
         const scene = ctx.scene as BABYLON.Scene;
 
+        let mesh = scene.getMeshByName(id);
+        (this.__node.graph as WorkerService).remove(id); //remove if not removed already
+        if(!mesh) return undefined; //already removed
+
         if(ctx.entities[id].crowdId) {
             ctx.crowds[ctx.entities[id].crowdId].entities.find((o,i) => { 
                 if(o.id === id) {
@@ -859,7 +901,6 @@ export const babylonRoutes = {
             })
         }
 
-        let mesh = scene.getMeshByName(id)
         if(mesh) scene.removeMesh(mesh);
 
         return id; //echo id for physics and nav threads to remove to remove by subscribing
