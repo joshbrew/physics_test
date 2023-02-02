@@ -5,11 +5,16 @@ import { PhysicsEntityProps, Vec3 } from './types';
 
 export const physicsRoutes = {
 
-    initWorld:function(entities?:PhysicsEntityProps[],gravity?:{x:number,y:number,z:number},...args:any[]) {
+    initWorld:function(
+        gravity?:{x:number,y:number,z:number},
+        entities?:PhysicsEntityProps[],
+        ...args:any[]
+    ) {
         return new Promise((res) => {
             RAPIER.init().then(() =>{
                 if(!gravity) gravity = { x: 0.0, y: -9.81, z:0 }; //for babylonjs we'll use y = -9.81 for correct world orientation
                 (this.__node.graph as WorkerService).world = new RAPIER.World(gravity,...args);
+                //(this.__node.graph as WorkerService).worldEvents = new RAPIER.EventQueue(true);
                 if(entities) {
                     let tags = entities.map((props) => {
                         if(props.collisionType)
@@ -27,6 +32,8 @@ export const physicsRoutes = {
     ) {
 
         if(!settings.collisionType) return undefined;
+
+        if(settings._id && this.__node.graph.get(settings._id)) return settings._id; //already established
 
         let rtype = settings.dynamic ? RAPIER.RigidBodyType.Dynamic : RAPIER.RigidBodyType.Fixed; //also kinematic types, need to learn what those do
         
@@ -88,6 +95,7 @@ export const physicsRoutes = {
             } 
         }
 
+        if(settings.ccd) rigidbody.enableCcd(settings.ccd);
 
         if(settings.linearDamping) {
             rigidbody.setLinearDamping(settings.linearDamping);
@@ -170,6 +178,8 @@ export const physicsRoutes = {
             if(settings.dynamic) {
                 rigidbody.setBodyType(settings.dynamic ? RAPIER.RigidBodyType.Dynamic : RAPIER.RigidBodyType.Fixed); //can set entity to be static or dynamic
             }
+            if(settings.ccd) rigidbody.enableCcd(settings.ccd);
+
             if(settings.density) {
                 rigidbody.collider(0).setDensity(settings.density);
             }
@@ -276,41 +286,60 @@ export const physicsRoutes = {
         buffered?:boolean //use float32array (px,py,pz,rx,ry,rz,rw * nbodies)? Much faster to transfer
     ) {
 
-        const world = this.__node.graph.world as RAPIER.World;        
+        const world = this.__node.graph.world as RAPIER.World;
+        //const events = (this.__node.graph as WorkerService).worldEvents as RAPIER.EventQueue;        
 
         world.step();
-        
+
         if(getValues) {
 
-            let values = buffered ? new Float32Array() : {};
+            let data = {
+                contacts:{}
+            } as any;
+            if(buffered) {
+                data.buffer = new Float32Array();
+            } else data.buffer = {};
             let idx = 0;
             let bufferValues = (body:RAPIER.RigidBody) => {
                 if(body.isDynamic()) { //we don't need to buffer static body positions as they are assumed fixed and/or externally updated
                     if(buffered) {
+                        let offset = idx*7;
                         let position = body.translation();
                         let rotation = body.rotation();
 
-                        let offset = idx*7;
+                        data.buffer[offset]   = position.x;
+                        data.buffer[offset+1] = position.y;
+                        data.buffer[offset+2] = position.z;
+                        data.buffer[offset+3] = rotation.x;
+                        data.buffer[offset+4] = rotation.y;
+                        data.buffer[offset+5] = rotation.z;
+                        data.buffer[offset+6] = rotation.w;
 
-                        values[offset]   = position.x;
-                        values[offset+1] = position.y;
-                        values[offset+2] = position.z;
-                        values[offset+3] = rotation.x;
-                        values[offset+4] = rotation.y;
-                        values[offset+5] = rotation.z;
-                        values[offset+6] = rotation.w;
+                        
+                        //get contact events for each body and report
+                        world.contactsWith(body.collider(0), (collider2) => {
+                            if(!data.contacts[(body as any)._id]) data.contacts[(body as any)._id] = [];
+                            data.contacts[(body as any)._id].push((collider2 as any).parent()._id);
+                        });
                     }
-                    else values[(body as any)._id] = {
-                        position:body.translation(),
-                        rotation:body.rotation()
+                    else {
+                        data.buffer[(body as any)._id] = {
+                            position:body.translation(),
+                            rotation:body.rotation()
+                        }
+                        //get contact events for each body and report
+                        world.contactsWith(body.collider(0), (collider2) => {
+                            if(!data.contacts[(body as any)._id]) data.contacts[(body as any)._id] = [];
+                            data.contacts[(body as any)._id].push((collider2 as any).parent()._id);
+                        });
                     }
                 }
                 idx++;
             }
 
-            world.bodies.forEach(bufferValues)
+            world.bodies.forEach(bufferValues);
 
-            return values;
+            return data;
         }
         
         return true;

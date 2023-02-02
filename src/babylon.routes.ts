@@ -9,11 +9,13 @@ import {
 } from 'graphscript'
 
 import * as BABYLON from 'babylonjs'
-import { PhysicsEntityProps, Vec3 } from '../src/types';
+import { PhysicsEntityProps } from '../src/types';
 
 import Recast from  "recast-detour"
 
 declare var WorkerGlobalScope;
+
+type PhysicsMesh = BABYLON.Mesh & { contacts?:string[], dynamic?:boolean, collisionType?:string };
 
 export const babylonRoutes = {
     ...workerCanvasRoutes,
@@ -83,13 +85,11 @@ export const babylonRoutes = {
                 const shadowGenerator = new BABYLON.ShadowGenerator(1024,light);
                 self.shadowGenerator = shadowGenerator;
 
-
-                
                 let entityNames = [] as any;
 
                 if(self.entities) { //settings passed from main thread as PhysicsEntityProps[]
                     let meshes = self.entities.map((e,i) => {
-                        let mesh = scene.getMeshById(this.__node.graph.run('loadBabylonEntity', e, self)); 
+                        let mesh = scene.getMeshById(this.__node.graph.run('addEntity', e, self)); 
                         entityNames[i] = e._id;
                         return mesh;
                     }) as BABYLON.Mesh[];
@@ -152,7 +152,7 @@ export const babylonRoutes = {
 
         if(ctx.entities) {
             let names = ctx.entities.map((e,i) => {
-                return this.__node.graph.run('loadBabylonEntity', e, self);
+                return this.__node.graph.run('addEntity', e, self);
             });
 
             return names;
@@ -194,6 +194,7 @@ export const babylonRoutes = {
             ctx = this.__node.graph.run('getCanvas',ctx);
 
         if(typeof ctx !== 'object') return undefined;
+        
 
         const scene = ctx.scene as BABYLON.Scene;
         const canvas = ctx.canvas as HTMLCanvasElement;
@@ -361,7 +362,36 @@ export const babylonRoutes = {
         }
 
         let aim;
-        let shoot;
+        let shoot = () => {
+            let forward = mesh.getDirection(BABYLON.Vector3.Forward()).scaleInPlace(1.8); //put the shot in front of the mesh
+            let impulse = forward.scale(3) as any;
+            impulse = {x:impulse.x,y:impulse.y,z:impulse.z};
+
+            let settings = {
+                _id:`shot${Math.floor(Math.random()*1000000000000000)}`,
+                position:{x:mesh.position.x+forward.x,y:mesh.position.y + forward.y,z:mesh.position.z + forward.z},
+                collisionType:'ball',
+                dynamic:true,
+                radius:0.1,
+                mass:0.1,
+                impulse
+            } as PhysicsEntityProps
+
+            this.__node.graph.run('addEntity', settings);
+
+            const bullet = scene.getMeshById(settings._id) as PhysicsMesh;
+
+            let bulletObsv = scene.onBeforeRenderObservable.add(() => {
+                if(bullet.contacts) { //exists when last frame detected a contact
+                    bullet.receiveShadows = false;
+                    const physicsWorker = (this.__node.graph as WorkerService).workers[(ctx as WorkerCanvas).physicsPort];
+                    physicsWorker.post('updatePhysicsEntity', [bullet.contacts[0], { impulse }]);
+                    this.__node.graph.run('removeBabylonEntity', settings._id);
+                    scene.onBeforeRenderObservable.remove(bulletObsv);
+                }
+            });
+        };
+        
         let rayOrSphereCastActivate; //activate crowd members in proximity when crossing a ray or sphere cast (i.e. vision)
         let placementMode; //place objects in the scene as navigation obstacles, trigger navmesh rebuilding for agent maneuvering 
 
@@ -442,7 +472,7 @@ export const babylonRoutes = {
 
         };
         let mousedownListener = (ev) => {
-
+            shoot();
         };
         let mousemoveListener = (ev) => {
             if(cameraMode === 'topdown') topDownLook(ev);
@@ -690,7 +720,7 @@ export const babylonRoutes = {
         }; //controls you can pop off the canvas
 
     },
-    loadBabylonEntity:function (
+    addEntity:function (
         settings:PhysicsEntityProps,
         ctx?:string|WorkerCanvas
     ) {
@@ -699,9 +729,11 @@ export const babylonRoutes = {
 
         if(typeof ctx !== 'object') return undefined;
 
+        if(settings._id && this.__node.graph.get(settings._id)) return settings._id; //already established
+
         const scene = ctx.scene as BABYLON.Scene;
 
-        let entity: BABYLON.Mesh | undefined;
+        let entity: PhysicsMesh | undefined;
         //limited settings rn for simplicity to work with the physics engine
         
         if(settings.collisionType === 'ball') {
@@ -748,17 +780,21 @@ export const babylonRoutes = {
                 height: settings.dimensions?.height ? settings.dimensions.height : 1, 
                 diameter: settings.radius ? settings.radius*2 : 1,
                 tessellation: 12
-            })
+            });
         } else if (settings.collisionType === 'cone') {
+            if(!settings._id) settings._id = `cone${Math.floor(Math.random()*1000000000000000)}`;
             entity = BABYLON.MeshBuilder.CreateCylinder(settings._id, { 
                 height: settings.dimensions?.height ? settings.dimensions.height : 1, 
                 diameter: settings.radius ? settings.radius*2 : 1,
                 tessellation: 12,
                 diameterTop:0
-            })
+            });
         } 
 
         if(entity) {
+
+            entity.dynamic = settings.dynamic;
+            entity.collisionType = settings.collisionType;
 
             if(settings.position) {
                 entity.position.x = settings.position.x;
@@ -791,15 +827,48 @@ export const babylonRoutes = {
             );
 
             node.__proxyObject(entity);
+            
+            ctx[entity.id] = settings;
+
+            //todo: check for redundancy
+            if(ctx.physicsPort) {
+                const physicsWorker = this.__node.graph.workers[ctx.physicsPort];
+                (physicsWorker as WorkerInfo).post('addPhysicsEntity', [settings]);
+            }
+            if(ctx.navPort) {
+                const navWorker = this.__node.graph.workers[ctx.navPort];
+                (navWorker as WorkerInfo).post('addEntity', [settings]); //duplicate entities for the crowd navigation thread e.g. to add agents, obstacles, etc.
+                if(settings.crowd) {
+                    (navWorker as WorkerInfo).post('addCrowdAgent', [settings._id, settings.crowd, ctx._id]);
+                }
+                if(settings.targetOf) {
+                    (navWorker as WorkerInfo).post('setCrowdTarget', [settings._id, settings.targetOf, ctx._id]);
+                }
+                if(settings.navMesh) {
+                    (navWorker as WorkerInfo).post('addToNavMesh', [settings._id, settings.navMesh, ctx._id]);
+                }
+            }
         }
 
         return settings._id;
     },
     updateBabylonEntities:function(
-        data:{[key:string]:{ 
-            position:{x:number,y:number,z:number}, 
-            rotation:{x:number,y:number,z:number,w:number} 
-        }}|number[],
+        data:{
+            buffer:{
+                [id:string]:{ 
+                    position:{x:number,y:number,z:number}, 
+                    rotation:{x:number,y:number,z:number,w:number},
+                }
+            },
+            contacts?:{
+                [id:string]:string[]
+            } //ids of meshes this body is in contact with
+        }|{
+            buffer:number[],
+            contacts?:{
+                [id:string]:string[]
+            } //ids of meshes this body is in contact with
+        },
         ctx?:WorkerCanvas|string 
     ) {
 
@@ -810,47 +879,57 @@ export const babylonRoutes = {
 
         const scene = ctx.scene as BABYLON.Scene;
 
-        if(Array.isArray(data)) { //array buffer
+        if(Array.isArray(data.buffer)) { //array buffer
             let idx = 0;
             let offset = 7;
             
             const entities = ctx.entities as PhysicsEntityProps[];
 
             entities.forEach((e,i) => { //array
-                let mesh = scene.getMeshByName(e._id as string) as BABYLON.Mesh;
-                if(mesh) {
+                let mesh = scene.getMeshByName(e._id as string) as PhysicsMesh;
+                if(mesh?.dynamic) {
                     let j = i*offset;
 
-                    mesh.position.x = data[j];
-                    mesh.position.y = data[j+1];
-                    mesh.position.z = data[j+2];
+                    mesh.position.x = data.buffer[j];
+                    mesh.position.y = data.buffer[j+1];
+                    mesh.position.z = data.buffer[j+2];
 
                     if(mesh.rotationQuaternion) {
-                        mesh.rotationQuaternion._x = data[j+3];
-                        mesh.rotationQuaternion._y = data[j+4];
-                        mesh.rotationQuaternion._z = data[j+5];
-                        mesh.rotationQuaternion._w = data[j+6];
+                        mesh.rotationQuaternion._x = data.buffer[j+3];
+                        mesh.rotationQuaternion._y = data.buffer[j+4];
+                        mesh.rotationQuaternion._z = data.buffer[j+5];
+                        mesh.rotationQuaternion._w = data.buffer[j+6];
                     }
+
+                    if(data.contacts?.[e._id]) {
+                        mesh.contacts = data[e._id].contacts;
+                    } else if(mesh.contacts) delete mesh.contacts; //delete old contacts on this frame
+
+                    idx++;
                 }
-                idx++;
             })
         }
         else if(typeof data === 'object') { //key-value pairs
-            for(const key in data) {
+            for(const key in data.buffer) {
                 //if(idx === 0) { idx++; continue; }
-                let mesh = scene.getMeshByName(key);
+                let mesh = scene.getMeshByName(key) as PhysicsMesh;
                 //console.log(JSON.stringify(mesh?.rotation),JSON.stringify(data[key].rotation))
                 if(mesh) {
-                    mesh.position.x = data[key].position.x;
-                    mesh.position.y = data[key].position.y;
-                    mesh.position.z = data[key].position.z;
-
-                    if(mesh.rotationQuaternion) {
-                        mesh.rotationQuaternion._x = data[key].rotation.x
-                        mesh.rotationQuaternion._y = data[key].rotation.y
-                        mesh.rotationQuaternion._z = data[key].rotation.z
-                        mesh.rotationQuaternion._w = data[key].rotation.w
+                    if(data.buffer[key].position) {
+                        mesh.position.x = data.buffer[key].position.x;
+                        mesh.position.y = data.buffer[key].position.y;
+                        mesh.position.z = data.buffer[key].position.z;
                     }
+                    if(data.buffer[key].rotation && mesh.rotationQuaternion) {
+                        mesh.rotationQuaternion._x = data.buffer[key].rotation.x
+                        mesh.rotationQuaternion._y = data.buffer[key].rotation.y
+                        mesh.rotationQuaternion._z = data.buffer[key].rotation.z
+                        mesh.rotationQuaternion._w = data.buffer[key].rotation.w
+                    }
+
+                    if(data.contacts?.[key]) {
+                        mesh.contacts = data.contacts[key];
+                    } else if(mesh.contacts) delete mesh.contacts; //delete old contacts on this frame
                 }
             }
         }
@@ -858,7 +937,7 @@ export const babylonRoutes = {
         return data; //echo for chaining threads
     },
     removeBabylonEntity:function (
-        id:string,
+        _id:string,
         ctx?:string|WorkerCanvas
     ) {
 
@@ -871,43 +950,61 @@ export const babylonRoutes = {
         // const engine = ctx.engine as BABYLON.Engine;
         const scene = ctx.scene as BABYLON.Scene;
 
-        let mesh = scene.getMeshByName(id);
-        (this.__node.graph as WorkerService).remove(id); //remove if not removed already
+        let mesh = scene.getMeshByName(_id);
         if(!mesh) return undefined; //already removed
 
-        if(ctx.entities[id].crowdId) {
-            ctx.crowds[ctx.entities[id].crowdId].entities.find((o,i) => { 
-                if(o.id === id) {
-                    ((ctx as any).crowds[(ctx as any).entities[id].crowdId].crowd as BABYLON.ICrowd).removeAgent(i);
-                    (ctx as any).crowds[(ctx as any).entities[id].crowdId].entities.splice(i,1);
-                    return true;
-                } 
-            });
-        }
-        if(ctx.entities[id].navMesh && ctx.navMesh) {
-            ctx.navMesh.meshesToMerge.find((o,i) => {
-                if(o.id === id) {
-                    ((ctx as any).navMesh.meshesToMerge as BABYLON.Mesh[]).splice(i,1);
-                    this.__node.graph.run(
-                        'createNavMesh',  
-                        (ctx as any).navMesh.meshesToMerge,  
-                        (ctx as any).navMesh.navMeshParameters, 
-                        (ctx as any).navMesh.debug,
-                        (ctx as any).navMesh.sendDebug,
-                        undefined,
-                        (ctx as any)._id
-                    );
+        if(ctx.entities[_id]) {
+            if(ctx.crowds) {
+                if(ctx.entities[_id].crowdId) {
+                    ctx.crowds[ctx.entities[_id].crowdId].entities.find((o,i) => { 
+                        if(o.id === _id) {
+                            ((ctx as any).crowds[(ctx as any).entities[_id].crowdId].crowd as BABYLON.ICrowd).removeAgent(i);
+                            (ctx as any).crowds[(ctx as any).entities[_id].crowdId].entities.splice(i,1);
+                            return true;
+                        } 
+                    });
                 }
-            })
+            }
+            if(ctx.navMesh) {
+                if(ctx.entities[_id].navMesh && ctx.navMesh) {
+                    ctx.navMesh.meshesToMerge.find((o,i) => {
+                        if(o.id === _id) {
+                            ((ctx as any).navMesh.meshesToMerge as BABYLON.Mesh[]).splice(i,1);
+                            this.__node.graph.run(
+                                'createNavMesh',  
+                                (ctx as any).navMesh.meshesToMerge,  
+                                (ctx as any).navMesh.navMeshParameters, 
+                                (ctx as any).navMesh.debug,
+                                (ctx as any).navMesh.sendDebug,
+                                undefined,
+                                (ctx as any)._id
+                            );
+                        }
+                    })
+                }
+            }
         }
 
-        if(mesh) scene.removeMesh(mesh);
+        (this.__node.graph as WorkerService).remove(_id); //remove if not removed already
+        delete ctx.entities[_id];
 
-        return id; //echo id for physics and nav threads to remove to remove by subscribing
+        if(ctx.navPort) {
+            const navWorker = this.__node.graph.workers[ctx.navPort];
+            (navWorker as WorkerInfo).post('removeBabylonEntity', mesh.id);
+        }
+        if(ctx.physicsPort) {
+            const physicsWorker = this.__node.graph.workers[ctx.physicsPort];
+            (physicsWorker as WorkerInfo).post('removePhysicsEntity', mesh.id);
+        }
+        
+        scene.removeMesh(mesh);
+        if(ctx.shadowGenerator) {
+            (ctx.shadowGenerator as BABYLON.ShadowGenerator).removeShadowCaster(mesh, true);
+        }
+
+
+        return _id; //echo id for physics and nav threads to remove to remove by subscribing
     },
-
-
-
 
     createNavMeshData: async (data) => {
         // get message datas
@@ -1097,7 +1194,7 @@ export const babylonRoutes = {
                 ctx.navMesh.debug, 
                 ctx.navMesh.sendDebug
             );
-        }
+        } else this.__node.graph.run('setNavMeshData', meshes, ctx);
 
     },
     createDebugNavMesh:function(data:Float32Array, ctx?:WorkerCanvas|string) {
@@ -1372,33 +1469,5 @@ export const babylonRoutes = {
 
         return agentUpdates;
         //this.__node.graph.workers[portId]?.post('updatePhysicsEntity', [entity.id,agentUpdates[entity.id]]);
-    },
-    addEntity: function (settings:PhysicsEntityProps, ctx?:string|WorkerCanvas) {
-
-        if(!ctx || typeof ctx === 'string')
-            ctx = this.__node.graph.run('getCanvas',ctx);
-
-        if(typeof ctx !== 'object') return undefined;
-        
-        settings._id = this.__node.graph.run('loadBabylonEntity', settings, ctx);
-
-        let physicsWorker = this.__node.graph.workers[ctx.physicsPort];
-        let navWorker = this.__node.graph.workers[ctx.navPort];
-
-        if(physicsWorker) {
-            (navWorker as WorkerInfo).post('addPhysicsEntity', settings);
-        }
-        if(navWorker) {
-            (navWorker as WorkerInfo).post('loadBabylonEntity', [settings, ctx._id]); //duplicate entities for the crowd navigation thread e.g. to add agents, obstacles, etc.
-            if(settings.crowd) {
-                (navWorker as WorkerInfo).post('addCrowdAgent', [settings._id, settings.crowd, ctx._id]);
-            }
-            if(settings.targetOf) {
-                (navWorker as WorkerInfo).post('setCrowdTarget', [settings._id, settings.targetOf, ctx._id]);
-            }
-            if(settings.navMesh) {
-                (navWorker as WorkerInfo).post('addToNavMesh', [settings._id, settings.navMesh, ctx._id]);
-            }
-        }
     }
-}
+};
