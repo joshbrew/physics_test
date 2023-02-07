@@ -7,7 +7,9 @@ export type PhysicsEntityProps = {
         'convexHull'|'convexMesh'|'heightfield'|'polyline'|
         'roundCone'|'roundTriangle'|'roundCylinder'|'roundCuboid'|'roundConvexHull'|'roundConvexMesh',
     collisionTypeParams?:any[], //e.g. radius, box dimensions
-    dynamic?:boolean|'kinematicP'|'kinematicV', //kinematic P and V let you manually update positions or velocities respectively to be treated correctly in the physics world to indicate forces
+    dynamic?:boolean|'kinematicP'|'kinematicV', //kinematic P and V let you manually update positions or velocities 
+        // respectively to be treated correctly in the physics world to indicate forces. They will not trigger isMoving() in Rapier however and must be 
+        //  manually tracked in the renderer
     position?:Vec3,
     rotation?:Quat,
     radius?:number, //ball or capsule

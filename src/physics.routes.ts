@@ -77,14 +77,14 @@ export const physicsRoutes = {
         }
 
         if(collider) {
-            if(settings.sensor) collider.setSensor(true);
+            //if(settings.sensor) collider.setSensor(true);
             ((this.__node.graph as WorkerService).world as RAPIER.World).createCollider(
                 collider,
                 rigidbody
             );
         }
         
-        setEntitySettings(world, settings, rigidbody, collider);
+        setEntitySettings(world, settings, rigidbody, rigidbody.collider(0));
 
         if(!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random()*1000000000000000)}`;
 
