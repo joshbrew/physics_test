@@ -1417,7 +1417,7 @@ export const babylonRoutes = {
     ) {
 
         if(!ctx || typeof ctx === 'string')
-            ctx = this.__node.graph.run('getCanvas',ctx);
+            ctx = this.__node.graph.run('getCanvas', ctx);
 
         if(typeof ctx !== 'object') return undefined;
 
@@ -1449,7 +1449,7 @@ export const babylonRoutes = {
     ) {
 
         if(!ctx || typeof ctx === 'string')
-            ctx = this.__node.graph.run('getCanvas',ctx);
+            ctx = this.__node.graph.run('getCanvas', ctx);
 
         if(typeof ctx !== 'object') return undefined;
 
@@ -1507,12 +1507,19 @@ export const babylonRoutes = {
                 let debugNavMesh = nav.createDebugNavMesh(scene);
                 if(sendDebug) {
                     let data = debugNavMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
-                    (this.__node.graph.workers[sendDebug] as WorkerInfo)?.run(
-                        'createDebugNavMesh', 
-                        [data, (ctx as WorkerCanvas)._id]
-                    );
+                    let indices = debugNavMesh.getIndices();
+                    setTimeout(() => {
+                        (this.__node.graph.workers[sendDebug] as WorkerInfo)?.post(
+                            'createDebugNavMesh', 
+                            [data, indices, (ctx as WorkerCanvas)._id]
+                        );
+                    }, 100);
                 } else {
-                    this.__node.graph.run('createDebugNavMesh', debugNavMesh);
+                    debugNavMesh.position = new BABYLON.Vector3(0, 0.01, 0);
+                    let matdebug = new BABYLON.StandardMaterial('matdebug', scene);
+                    matdebug.diffuseColor = new BABYLON.Color3(0.1, 0.2, 1);
+                    matdebug.alpha = 0.2;
+                    debugNavMesh.material = matdebug;
                 }
             }
             //-------------------------
@@ -1527,7 +1534,6 @@ export const babylonRoutes = {
                 navMeshParameters, 
                 (navMeshData) => {
                     let created = withNavMesh(navMeshData);
-                    console.log(created);
                     res(created); //will live on ctx.navMesh
                 }
             )
@@ -1567,7 +1573,6 @@ export const babylonRoutes = {
         if(ctx.navMesh) {
             if(typeof mesh === 'object') {
                 mesh = mesh.id;
-                
             }
 
             ctx.navMesh.meshesToMerge.find((o,i) => {
@@ -1586,26 +1591,31 @@ export const babylonRoutes = {
             );
         }
     },
-    createDebugNavMesh:function(data:Float32Array, ctx?:WorkerCanvas|string) {
+    createDebugNavMesh:function(data:BABYLON.FloatArray, indices: BABYLON.IndicesArray, ctx?:WorkerCanvas|string) {
 
         if(!ctx || typeof ctx === 'string')
-            ctx = this.__node.graph.run('getCanvas',ctx);
-
+            ctx = this.__node.graph.run('getCanvas', ctx);
         if(typeof ctx !== 'object') return undefined;
-
+        
         const scene = ctx.scene;
 
-        let navmeshdebug = new BABYLON.Mesh('navDebugMesh', scene);
-        
-        navmeshdebug.setVerticesData(BABYLON.VertexBuffer.PositionKind, data);
+        let navmeshdebug:BABYLON.Mesh;
+        if(!scene.getMeshById('navMeshDebug')) navmeshdebug = new BABYLON.Mesh('navDebugMesh', scene);
+        else navmeshdebug = scene.getMeshById('navMeshDebug');
 
-        //console.log(navmeshdebug);
+        let vertexData = new BABYLON.VertexData();
+        vertexData.positions = data;
+        vertexData.indices = indices;
+        
+        vertexData.applyToMesh(navmeshdebug);
 
         navmeshdebug.position = new BABYLON.Vector3(0, 0.01, 0);
         let matdebug = new BABYLON.StandardMaterial('matdebug', scene);
         matdebug.diffuseColor = new BABYLON.Color3(0.1, 0.2, 1);
         matdebug.alpha = 0.2;
         navmeshdebug.material = matdebug;
+
+        console.log(navmeshdebug);
 
     },
     createCrowd:async function (
@@ -1647,7 +1657,6 @@ export const babylonRoutes = {
             initialTarget = scene.getMeshById(initialTarget) as BABYLON.Mesh;
             
         ctx.crowds[crowdId] = {crowd, target:initialTarget, entities};
-
 
         let agentParams = {
             radius: 0.1,
