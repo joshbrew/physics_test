@@ -3,6 +3,7 @@ import RAPIER from '@dimforge/rapier3d-compat'
 import { GraphNode, WorkerService } from 'graphscript'
 import { PhysicsEntityProps, Vec3 } from './types';
 
+
 export const physicsRoutes = {
 
     initWorld:function(
@@ -35,7 +36,16 @@ export const physicsRoutes = {
 
         if(settings._id && this.__node.graph.get(settings._id)) return settings._id; //already established
 
-        let rtype = settings.dynamic ? RAPIER.RigidBodyType.Dynamic : RAPIER.RigidBodyType.Fixed; //also kinematic types, need to learn what those do
+        const world = this.__node.graph.world as RAPIER.World;
+
+        let rtype: RAPIER.RigidBodyType; //also kinematic types, need to learn what those do
+        if(settings.dynamic === true) {
+            rtype = RAPIER.RigidBodyType.Dynamic;
+        } else if (settings.dynamic === 'kinematicP') {
+            rtype = RAPIER.RigidBodyType.KinematicPositionBased;
+        } else if (settings.dynamic === 'kinematicV') {
+            rtype = RAPIER.RigidBodyType.KinematicVelocityBased
+        } else rtype = RAPIER.RigidBodyType.Fixed;
         
         let desc = new RAPIER.RigidBodyDesc(
             rtype
@@ -67,78 +77,14 @@ export const physicsRoutes = {
         }
 
         if(collider) {
-            if(settings.density) {
-                collider.setDensity(settings.density);
-            }
-            if(settings.restitution) {
-                collider.setRestitution(settings.restitution);
-            }
-            if(settings.mass) {
-                collider.setMass(settings.mass);
-            } 
-            if(settings.centerOfMass) {
-                collider.setMassProperties(
-                    settings.mass as number,
-                    settings.centerOfMass,
-                    undefined as any,
-                    undefined as any
-                );
-            }
-
+            if(settings.sensor) collider.setSensor(true);
             ((this.__node.graph as WorkerService).world as RAPIER.World).createCollider(
                 collider,
                 rigidbody
             );
-
-            if(settings.friction) {
-                collider.setFriction(settings.friction);
-            } 
-        }
-
-        if(settings.ccd) rigidbody.enableCcd(settings.ccd);
-
-        if(settings.linearDamping) {
-            rigidbody.setLinearDamping(settings.linearDamping);
-        }
-        if(settings.angularDamping) {
-            rigidbody.setAngularDamping(settings.angularDamping)
         }
         
-        if(settings.position) {
-            rigidbody.setTranslation(settings.position,false);
-        }
-        if(settings.rotation) {
-            rigidbody.setRotation(settings.rotation,false);
-        }
-
-        if(settings.impulse) {
-            rigidbody.applyImpulse(settings.impulse,false);        
-        }
-        if(settings.force) {
-            rigidbody.addForce(settings.force,false);
-        }
-        if(settings.acceleration) {
-            let mass = rigidbody.mass();
-            rigidbody.applyImpulse(
-                {
-                    x:settings.acceleration.x*mass,
-                    y:settings.acceleration.y*mass,
-                    z:settings.acceleration.z*mass
-                }, true
-            )
-        }
-        if(settings.velocity) {
-            rigidbody.setLinvel(
-                settings.velocity,
-                true
-            );
-        }
-        if(settings.angvelocity) {
-            rigidbody.setAngvel(
-                settings.angvelocity,
-                true
-            );
-        }
+        setEntitySettings(world, settings, rigidbody, collider);
 
         if(!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random()*1000000000000000)}`;
 
@@ -162,88 +108,22 @@ export const physicsRoutes = {
         let rigidbody = this.__node.graph.get(_id) as RAPIER.RigidBody;
         if(rigidbody as RAPIER.RigidBody) {
 
-            if(settings.linearDamping) {
-                rigidbody.setLinearDamping(settings.linearDamping);
-            }
-            if(settings.angularDamping) {
-                rigidbody.setAngularDamping(settings.angularDamping)
-            }
-
-            if(settings.position) {
-                rigidbody.setTranslation(settings.position,true); //{x,y,z}
-            }
-            if(settings.rotation) {
-                rigidbody.setRotation(settings.rotation,true); //quaternion {x,y,z,w}. Leave w as 1
-            }
-            if(settings.dynamic) {
-                rigidbody.setBodyType(settings.dynamic ? RAPIER.RigidBodyType.Dynamic : RAPIER.RigidBodyType.Fixed); //can set entity to be static or dynamic
-            }
-            if(settings.ccd) rigidbody.enableCcd(settings.ccd);
-
-            if(settings.density) {
-                rigidbody.collider(0).setDensity(settings.density);
-            }
-            if(settings.restitution) {
-                rigidbody.collider(0).setRestitution(settings.restitution);
-            }
-            if(settings.mass) {
-                rigidbody.collider(0).setMass(settings.mass);
-            } 
-            if(settings.friction) {
-                rigidbody.collider(0).setFriction(settings.friction);
-            }
+            const world = this.__node.graph.world as RAPIER.World;
             
-            if(settings.centerOfMass) {
-                rigidbody.collider(0).setMassProperties(
-                    settings.mass as number,
-                    settings.centerOfMass,
-                    undefined as any,
-                    undefined as any
-                );
-            }
-            if(settings.impulse) {
-                rigidbody.applyImpulse(settings.impulse,true);        
-            }
-            if(settings.force) {
-                rigidbody.addForce(settings.force,true);
-            }
-            if(settings.acceleration) {
-                let mass = rigidbody.mass();
-                rigidbody.applyImpulse(
-                    {
-                        x:settings.acceleration.x*mass,
-                        y:settings.acceleration.y*mass,
-                        z:settings.acceleration.z*mass
-                    }, true
-                )
-            }
-            if(settings.velocity) {
-
-                let v = rigidbody.linvel();
-
-                if(settings.velocity.x) v.x = settings.velocity.x;
-                if(settings.velocity.y) v.y = settings.velocity.y;
-                if(settings.velocity.z) v.z = settings.velocity.z;
-
-                rigidbody.setLinvel(
-                    v,
-                    true
-                );
-            }
-            if(settings.angvelocity) {
-
-                let v = rigidbody.linvel();
-
-                if(settings.angvelocity.x) v.x = settings.angvelocity.x;
-                if(settings.angvelocity.y) v.y = settings.angvelocity.y;
-                if(settings.angvelocity.z) v.z = settings.angvelocity.z;
-
-                rigidbody.setAngvel(
-                    v,
-                    true
-                );
+            if(settings.dynamic) {
+                let rtype: RAPIER.RigidBodyType; //also kinematic types, need to learn what those do
+                if(settings.dynamic === true) {
+                    rtype = RAPIER.RigidBodyType.Dynamic;
+                } else if (settings.dynamic === 'kinematicP') {
+                    rtype = RAPIER.RigidBodyType.KinematicPositionBased;
+                } else if (settings.dynamic === 'kinematicV') {
+                    rtype = RAPIER.RigidBodyType.KinematicVelocityBased
+                } else rtype = RAPIER.RigidBodyType.Fixed;
+                rigidbody.setBodyType(rtype); //can set entity to be static or dynamic
             }
 
+            const collider = rigidbody.collider(0);
+            setEntitySettings(world, settings as PhysicsEntityProps, rigidbody, collider);
             return true;
         }
     },
@@ -301,7 +181,7 @@ export const physicsRoutes = {
             } else data.buffer = {};
             let idx = 0;
             let bufferValues = (body:RAPIER.RigidBody) => {
-                if(body.isDynamic()) { //we don't need to buffer static body positions as they are assumed fixed and/or externally updated
+                if(body.isMoving()) { //we don't need to buffer static body positions as they are assumed fixed and/or externally updated
                     if(buffered) {
                         let offset = idx*7;
                         let position = body.translation();
@@ -368,23 +248,20 @@ export const physicsRoutes = {
         direction:Vec3, //conforms more with babylonjs
         length:number,
         withCollision:(collision:RAPIER.ShapeColliderTOI) => void, //deal with the collision, does not return multiple collisions, use sphereIntersections for tha, e.g. chaining these commands using the witness vector
-        filterCollider?:(colliderHandle:number) => boolean, //return true to continue the sphere cast with the previous closest collider filtered, the cast only returns the first acceptable hit
+        filterCollider?:(collider:RAPIER.Collider) => boolean, //return true to continue the sphere cast with the previous closest collider filtered, the cast only returns the first acceptable hit
         stopAtPenetration:boolean = true,
         filterFlags?:RAPIER.QueryFilterFlags,
-        filterGroups?:number,
-        filterExcludeCollider?:number,
-        filterExcludeRigidBody?:number
+        filterGroups?:number[]|number,
+        filterExcludeCollider?:RAPIER.Collider,
+        filterExcludeRigidBody?:RAPIER.RigidBody
     ) {
         const world = this.__node.graph.world as RAPIER.World;
 
         if(!world) return;
 
-        if(!this.__node.graph.worldQuery) this.__node.graph.worldQuery = new RAPIER.QueryPipeline();
-        const query = this.__node.graph.worldQuery;
-
+        //if(!this.__node.graph.worldQuery) this.__node.graph.worldQuery = new RAPIER.QueryPipeline();
+ 
         const sphere = new RAPIER.Ball(radius);
-
-        query.update(world.islands, world.bodies, world.colliders);
 
         let toi = 0.01;
         let _toi = 1/toi;
@@ -395,10 +272,24 @@ export const physicsRoutes = {
             z:length*direction.z*_toi
         };
 
+        let intersections;
+
+        if(!filterCollider) { //default function will return the list of every rigidbody id in the sphere cast
+            intersections = [] as string[];
+            filterCollider = (collider) => {
+                let rigidbody = collider.parent();
+                if((rigidbody as any)._id) intersections.push((rigidbody as any)._id);
+                return false;
+            }
+        }
+
+        let cfilters;
+        if(Array.isArray(filterGroups)) {
+            cfilters = makeCollisionGroupFilter(filterGroups);
+        } else cfilters = filterGroups;
+
         //returns first collision
-        let colliding = query.castShape(
-            world.bodies,
-            world.colliders,
+        let colliding = world.castShape(
             startPos,
             new RAPIER.Quaternion(0,0,0,1),
             velocity,
@@ -406,62 +297,213 @@ export const physicsRoutes = {
             toi,
             stopAtPenetration,
             filterFlags,
-            filterGroups,
+            cfilters,
             filterExcludeCollider,
             filterExcludeRigidBody,
             filterCollider
         );
 
         if(colliding) withCollision(colliding);
-        
-        query.free();
 
-        return colliding?.collider.handle; //return handle of collider for lookup etc.
+        return intersections; //return handle of collider for lookup etc.
 
     },
     sphereIntersections:function( //find all colliders intersecting a sphere of a given radius and position
         radius:number, 
         position:Vec3, 
-        intersects:(collider?:RAPIER.RigidBody|null) => boolean, //return true or false to stop iterating
-        filterCollider?:(colliderHandle:number) => boolean, //return true to call the intersection function
+        intersects:((body?:RAPIER.RigidBody|null) => boolean) = (body) => { return false; }, //return true or false to stop iterating
+        filterCollider?:(collider:RAPIER.Collider) => boolean, //return true to call the intersection function
         filterFlags?:RAPIER.QueryFilterFlags,
-        filterGroups?:number,
-        filterExcludeCollider?:number,
-        filterExcludeRigidBody?:number,
+        filterGroups?:number[]|number,
+        filterExcludeCollider?:RAPIER.Collider,
+        filterExcludeRigidBody?:RAPIER.RigidBody,
     ) {
         const world = this.__node.graph.world as RAPIER.World;
 
         if(!world) return;
 
-        if(!this.__node.graph.worldQuery) this.__node.graph.worldQuery = new RAPIER.QueryPipeline();
-        const query = this.__node.graph.worldQuery;
+        //if(!this.__node.graph.worldQuery) this.__node.graph.worldQuery = new RAPIER.QueryPipeline();
 
         const sphere = new RAPIER.Ball(radius);
+        let intersections = [] as string[];
 
-        query.update(world.islands, world.bodies, world.colliders);
+        let cfilters;
+        if(Array.isArray(filterGroups)) {
+            cfilters = makeCollisionGroupFilter(filterGroups);
+        } else cfilters = filterGroups;
 
-        let anyIntersection = false;
-
-        query.intersectionsWithShape(
-            world.bodies,
-            world.colliders,
+        world.intersectionsWithShape(
             position,
             new RAPIER.Quaternion(0,0,0,1),
             sphere,
-            (handle) => {
-                if(!anyIntersection) anyIntersection = true;
-                return intersects(world.colliders.get(handle)?.parent());
+            (collider) => {
+                let rigidbody = collider.parent();
+                if((rigidbody as any)._id) intersections.push((rigidbody as any)._id);
+                return intersects(rigidbody);
             },
             filterFlags,
-            filterGroups,
+            cfilters,
             filterExcludeCollider,
             filterExcludeRigidBody,
             filterCollider
         );
-        
-        query.free();
 
-        return anyIntersection;
+        return intersections;
 
     }
+    
+}
+
+function makeCollisionGroupFilter(collisionGroups:number[], collisionFilters?:number[]) {
+    let bitmask = new Array(16).fill(0);
+        collisionGroups.forEach((grp) => {
+                bitmask[15-grp] = 1;
+        });
+    let filter = bitmask.join('');
+    if(collisionFilters) {
+        let bitmask2 = new Array(16).fill(0);
+            collisionFilters.forEach((grp) => {
+                bitmask2[15-grp] = 1;
+            });
+        filter = `0b${filter}${bitmask2.join('')}`;
+    }
+    else filter = `0b${filter}${filter}`;
+
+    return parseInt(filter);
+}
+
+function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigidbody: RAPIER.RigidBody, collider?:RAPIER.ColliderDesc|RAPIER.Collider, graph?) {
+    if(collider) {
+        if(settings.density) {
+            collider.setDensity(settings.density);
+        }
+        if(settings.restitution) {
+            collider.setRestitution(settings.restitution);
+        }
+        if(settings.mass) {
+            collider.setMass(settings.mass);
+        } 
+        if(settings.centerOfMass) {
+            collider.setMassProperties(
+                settings.mass as number,
+                settings.centerOfMass,
+                undefined as any,
+                undefined as any
+            );
+        }
+
+        if(settings.friction) {
+            collider.setFriction(settings.friction);
+        } 
+
+        if(settings.collisionGroups) {
+            let mask = makeCollisionGroupFilter(settings.collisionGroups,settings.collisionFilters);
+            collider.setCollisionGroups(mask);
+            if(!settings.solverGroups) {
+                collider.setSolverGroups(mask);
+            }
+        }  
+        if (settings.solverGroups) {
+            //need to turn the array into a 16 bit mask
+            let mask = makeCollisionGroupFilter(settings.solverGroups,settings.solverFilters);
+            collider.setSolverGroups(mask);
+        }
+
+        if(settings.sensor) {
+            collider.setSensor(true);
+        }
+    }
+
+    if(settings.ccd) rigidbody.enableCcd(settings.ccd);
+
+    if(settings.linearDamping) {
+        rigidbody.setLinearDamping(settings.linearDamping);
+    }
+    if(settings.angularDamping) {
+        rigidbody.setAngularDamping(settings.angularDamping)
+    }
+
+    if(settings.position) {
+        rigidbody.setTranslation(settings.position,false);
+    }
+    if(settings.rotation) {
+        rigidbody.setRotation(settings.rotation,false);
+    }
+
+    if(settings.impulse) {
+        rigidbody.applyImpulse(settings.impulse,false);        
+    }
+    if(settings.force) {
+        rigidbody.addForce(settings.force,false);
+    }
+    if(settings.acceleration) {
+        let mass = rigidbody.mass();
+        rigidbody.applyImpulse(
+            {
+                x:settings.acceleration.x*mass,
+                y:settings.acceleration.y*mass,
+                z:settings.acceleration.z*mass
+            }, true
+        )
+    }
+    if(settings.velocity) {
+
+        let v = rigidbody.linvel();
+
+        if(settings.velocity.x) v.x = settings.velocity.x;
+        if(settings.velocity.y) v.y = settings.velocity.y;
+        if(settings.velocity.z) v.z = settings.velocity.z;
+
+        rigidbody.setLinvel(
+            v,
+            true
+        );
+    }
+    if(settings.angvelocity) {
+
+        let v = rigidbody.linvel();
+
+        if(settings.angvelocity.x) v.x = settings.angvelocity.x;
+        if(settings.angvelocity.y) v.y = settings.angvelocity.y;
+        if(settings.angvelocity.z) v.z = settings.angvelocity.z;
+
+        rigidbody.setAngvel(
+            v,
+            true
+        );
+    }
+    
+    if(settings.addVelocity) {
+
+        let v = rigidbody.linvel();
+
+        if(settings.addVelocity.x) v.x += settings.addVelocity.x;
+        if(settings.addVelocity.y) v.y += settings.addVelocity.y;
+        if(settings.addVelocity.z) v.z += settings.addVelocity.z;
+
+        rigidbody.setLinvel(
+            v,
+            true
+        );
+    }
+    if(settings.addAngVelocity) {
+
+        let v = rigidbody.linvel();
+
+        if(settings.addAngVelocity.x) v.x += settings.addAngVelocity.x;
+        if(settings.addAngVelocity.y) v.y += settings.addAngVelocity.y;
+        if(settings.addAngVelocity.z) v.z += settings.addAngVelocity.z;
+
+        rigidbody.setAngvel(
+            v,
+            true
+        );
+    }
+
+    if(settings.parent && this.__node?.graph) {
+        let parent = this.__node.graph.get(settings.parent)?.__props as RAPIER.RigidBody;
+        let params = RAPIER.JointData.fixed(parent.translation(), {x:0,y:0,z:0,w:1}, rigidbody.translation(), {x:0,y:0,z:0,w:1});
+        world.createImpulseJoint(params,parent,rigidbody,true);
+    }
+
 }

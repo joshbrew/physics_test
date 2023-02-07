@@ -104,7 +104,8 @@ let graph = new WorkerService({
                             dimensions:{width:10,height:10,depth:1},
                             dynamic:false,
                             restitution:1,
-                            position:{x:0,y:5,z:-5}
+                            position:{x:0,y:5,z:-5},
+                            navMesh:true
                         },
                         {
                             _id:'rightwall',
@@ -112,7 +113,8 @@ let graph = new WorkerService({
                             dimensions:{width:10,height:10,depth:1},
                             dynamic:false,
                             restitution:1,
-                            position:{x:0,y:5,z:5}
+                            position:{x:0,y:5,z:5},
+                            navMesh:true
                         },
                         {
                             _id:'ground2',

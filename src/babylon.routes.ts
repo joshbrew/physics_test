@@ -6,6 +6,7 @@ import {
     isTypedArray, 
     WorkerInfo,
     WorkerService,
+    //recursivelyAssign,
 } from 'graphscript'
 
 import * as BABYLON from 'babylonjs'
@@ -15,7 +16,22 @@ import Recast from  "recast-detour"
 
 declare var WorkerGlobalScope;
 
-type PhysicsMesh = BABYLON.Mesh & { contacts?:string[], dynamic?:boolean, collisionType?:string };
+type PhysicsMesh = BABYLON.Mesh & { contacts?:string[], dynamic?:boolean | "kinematicP" | "kinematicV" , collisionType?:string };
+
+function recursivelyAssign (target,obj) {
+    for(const key in obj) {
+        if(obj[key]?.constructor.name === 'Object') {
+            if(target[key]?.constructor.name === 'Object') 
+                recursivelyAssign(target[key], obj[key]);
+            else target[key] = recursivelyAssign({},obj[key]); 
+        } else {
+            target[key] = obj[key];
+            //if(typeof target[key] === 'function') target[key] = target[key].bind(this);
+        }
+    }
+
+    return target;
+}
 
 export const babylonRoutes = {
     ...workerCanvasRoutes,
@@ -63,11 +79,11 @@ export const babylonRoutes = {
 
                     if(picked.pickedMesh?.name === 'capsule1' && self.controls?.mode !== 'player') {
                         if(self.controls) this.__node.graph.run('removeControls', self.controls, self);
-                            self.controls =this.__node.graph.run('addPlayerControls', 'capsule1', self.physicsPort, 2, 'topdown', true);
+                        self.controls = this.__node.graph.run('addPlayerControls', 'capsule1', self.physicsPort, 2, 'topdown', true, self);
                         //console.log(picked.pickedMesh);
                     } 
                     else if(!self.controls) {
-                        self.controls = this.__node.graph.run('addCameraControls', self);
+                        self.controls = this.__node.graph.run('addCameraControls', 0.5, self);
                     }
                         
                 });
@@ -89,7 +105,7 @@ export const babylonRoutes = {
 
                 if(self.entities) { //settings passed from main thread as PhysicsEntityProps[]
                     let meshes = self.entities.map((e,i) => {
-                        let mesh = scene.getMeshById(this.__node.graph.run('addEntity', e, self)); 
+                        let mesh = scene.getMeshById(this.__node.graph.run('addEntity', e, self, true)); 
                         entityNames[i] = e._id;
                         return mesh;
                     }) as BABYLON.Mesh[];
@@ -152,7 +168,7 @@ export const babylonRoutes = {
 
         if(ctx.entities) {
             let names = ctx.entities.map((e,i) => {
-                return this.__node.graph.run('addEntity', e, self);
+                return this.__node.graph.run('addEntity', e, self, true);
             });
 
             return names;
@@ -214,8 +230,7 @@ export const babylonRoutes = {
 
         //attach the camera to the mesh
         const camera = ctx.camera as BABYLON.FreeCamera;
-        let cameraobs: BABYLON.Observer<BABYLON.Scene>;
-        
+
         physics.run('updatePhysicsEntity', [
             meshId, { 
                 position: { x:mesh.position.x, y:mesh.position.y, z:mesh.position.z },
@@ -227,47 +242,61 @@ export const babylonRoutes = {
             } as PhysicsEntityProps]
         );
 
+        let cameraobs: BABYLON.Observer<BABYLON.Scene>;
         if(camera) {
-
+            
             if(cameraMode === 'topdown') {
                 camera.position = mesh.position.add(new BABYLON.Vector3(0, 20, -8));
-                camera.rotation = new BABYLON.Vector3(0, 0, Math.PI);
-                
+                camera.rotation.set(0,0,Math.PI);
                 camera.setTarget(mesh.position);
-
-                let obs = scene.onBeforeRenderObservable.add(() => {
-                    camera.position = mesh.position.add(new BABYLON.Vector3(0, 20, -8));
-                });
-
-                cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
             }
             else if(cameraMode === 'firstperson') {
                 camera.position = mesh.position//.add(new BABYLON.Vector3(0, 1, 0));
-                camera.rotation = rotdefault.toEulerAngles();
-                camera.rotation.y = 1;
-                
-                let obs = scene.onBeforeRenderObservable.add(() => {
-                    camera.position = mesh.position//.add(new BABYLON.Vector3(0, 1, 0));
-                });
-
-                cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
-            }
+                let rot = rotdefault.toEulerAngles();
+                camera.rotation.set(rot.x,1,rot.z);
+            }   
             else if (cameraMode === 'thirdperson') {
                 camera.position = mesh.position.subtract(mesh.getDirection(BABYLON.Vector3.Forward()).scaleInPlace(4).subtract(mesh.getDirection(BABYLON.Vector3.Left()).scaleInPlace(1.5)));
                 camera.position.y += 2.5;
-                camera.rotation = rotdefault.toEulerAngles();
-                camera.rotation.y = 1;
-                
-                let obs = scene.onBeforeRenderObservable.add(() => {
-                    if(cameraMode === 'thirdperson') {
-                        camera.position = mesh.position.subtract(mesh.getDirection(BABYLON.Vector3.Forward()).scaleInPlace(4).subtract(mesh.getDirection(BABYLON.Vector3.Left()).scaleInPlace(1.5)));
-                        camera.position.y += 2.5;
-                    }
-                });
+                let rot = rotdefault.toEulerAngles();
+                camera.rotation.set(rot.x,1,rot.z);
+            }
 
-                cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
+            let obs = scene.onBeforeRenderObservable.add(() => {
+                if(cameraMode === 'topdown') 
+                    camera.position = mesh.position.add(new BABYLON.Vector3(0, 20, -8));
+                else if (cameraMode === 'firstperson') 
+                    camera.position = mesh.position//.add(new BABYLON.Vector3(0, 1, 0));
+                else if(cameraMode === 'thirdperson') {
+                    camera.position = mesh.position.subtract(mesh.getDirection(BABYLON.Vector3.Forward()).scaleInPlace(4).subtract(mesh.getDirection(BABYLON.Vector3.Left()).scaleInPlace(1.5)));
+                    camera.position.y += 2.5;
+                }
+            });
+
+            cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
+         
+        }
+
+        let swapCameras = () => {
+            if(cameraMode === 'topdown')
+                cameraMode = 'firstperson';
+            else if (cameraMode === 'firstperson')
+                cameraMode = 'thirdperson';
+            else if (cameraMode === 'thirdperson') {
+                cameraMode = 'topdown';
+                camera.rotation.set(0,0,Math.PI);
+                camera.setTarget(mesh.position);
             }
         }
+
+        let cleanupControls = () => {
+            if(typeof ctx === 'object') {
+                if(cameraobs) scene.onBeforeRenderObservable.remove(cameraobs);
+                this.__node.graph.run('removeControls', ctx.controls, ctx);
+                ctx.controls = this.__node.graph.run('addCameraControls', 0.5, ctx);
+            }   
+        }
+
         //various controls
         let forward = () => {
             let v = globalDirection ? BABYLON.Vector3.Forward() : mesh.getDirection(BABYLON.Vector3.Forward());
@@ -345,6 +374,9 @@ export const babylonRoutes = {
             }
         };
         //let firstPersonLook //look at camera controller
+
+        let mode = 0; //0 shoot, 1 placement
+
         let sensitivity = 4;
         let fpsLook = (ev) => {
                 let dMouseX = ev.movementX;
@@ -361,10 +393,10 @@ export const babylonRoutes = {
                 physics.post('updatePhysicsEntity', [meshId, { rotation:{ x:rot.x, y:rot.y, z:rot.z, w:rot.w} }]);
         }
 
-        let aim;
+
         let shoot = () => {
             let forward = mesh.getDirection(BABYLON.Vector3.Forward()).scaleInPlace(1.8); //put the shot in front of the mesh
-            let impulse = forward.scale(3) as any;
+            let impulse = forward.scale(0.05) as any;
             impulse = {x:impulse.x,y:impulse.y,z:impulse.z};
 
             let settings = {
@@ -381,71 +413,259 @@ export const babylonRoutes = {
 
             const bullet = scene.getMeshById(settings._id) as PhysicsMesh;
 
+            let removed = false;
+            const removeBullet = (contacting?:string) => {
+                removed = true;
+                bullet.receiveShadows = false;
+                const physicsWorker = (this.__node.graph as WorkerService).workers[(ctx as WorkerCanvas).physicsPort];
+                let pulse = {x:impulse.x*100,y:impulse.y*100,z:impulse.z*100};
+                if(contacting) physicsWorker.post('updatePhysicsEntity', [contacting, { impulse:pulse }]);
+                this.__node.graph.run('removeEntity', settings._id);
+                scene.onBeforeRenderObservable.remove(bulletObsv);
+            }
+
             let bulletObsv = scene.onBeforeRenderObservable.add(() => {
-                if(bullet.contacts) { //exists when last frame detected a contact
-                    bullet.receiveShadows = false;
-                    const physicsWorker = (this.__node.graph as WorkerService).workers[(ctx as WorkerCanvas).physicsPort];
-                    physicsWorker.post('updatePhysicsEntity', [bullet.contacts[0], { impulse }]);
-                    this.__node.graph.run('removeBabylonEntity', settings._id);
-                    scene.onBeforeRenderObservable.remove(bulletObsv);
+                if(bullet.contacts && !removed) { //exists when last frame detected a contact
+                    //console.log(bullet.contacts);
+                    removeBullet(bullet.contacts[0]);
                 }
             });
+
+            setTimeout(() => { if(!removed) removeBullet(); }, 2000);
         };
-        
-        let rayOrSphereCastActivate; //activate crowd members in proximity when crossing a ray or sphere cast (i.e. vision)
-        let placementMode; //place objects in the scene as navigation obstacles, trigger navmesh rebuilding for agent maneuvering 
+
+        let aim = () => {}
+
+        let placing = 'cube';
+        let ghostPlaceableId;
+        let ghostPlaceable: BABYLON.Mesh | undefined;
+        let placed = {}; //record of placements
+        let placeable = {
+            cube: {
+                collisionType:'cuboid',
+                dimensions:{height:1, width:1, depth:1},
+                mass:10,
+                dynamic:false,
+                position:{x:0, y:0.5, z:0}
+            } as Partial<PhysicsEntityProps>,
+            wall: {
+                collisionType:'cuboid',
+                dimensions:{height:10, width:10, depth:1},
+                navMesh:true,
+                position:{x:0, y:5, z:0}
+            } as Partial<PhysicsEntityProps>,
+            platform: {
+                collisionType:'cuboid',
+                dimensions:{width:10,height:1,depth:10},
+                navMesh:true,
+                position:{x:0, y:5, z:0}
+            } as Partial<PhysicsEntityProps>,
+        }
+
+        let makePlaceable = (pick:BABYLON.PickingInfo) => {
+            let settings = recursivelyAssign({},placeable[placing]);
+            if(pick.pickedPoint) {
+                settings.position.x += pick.pickedPoint.x;
+                settings.position.y += pick.pickedPoint.y;
+                settings.position.z += pick.pickedPoint.z;
+            }
+            settings._id = `placeable${Math.floor(Math.random()*1000000000000000)}`;
+            settings.sensor = true;
+            this.__node.graph.run('addEntity', settings, ctx);
+            ghostPlaceableId = settings._id;
+            ghostPlaceable = scene.getMeshById(ghostPlaceableId) as BABYLON.Mesh;
+
+            hoverPlacement();
+        }
+
+        let removeGhostPlaceable = () => {
+            if(ghostPlaceableId)
+                this.__node.graph.run('removeEntity', ghostPlaceableId);
+
+            ghostPlaceableId = undefined;
+            ghostPlaceable = undefined;
+        }
+
+        let hoverPlacement = () => {
+            let pick = scene.pick(scene.pointerX, scene.pointerY, (mesh) => { 
+                if(ghostPlaceable && mesh.id === ghostPlaceableId) return false;
+                else return true;  
+            });
+
+            if(pick.pickedMesh?.id && placed[pick.pickedMesh.id]) {
+                removeGhostPlaceable();
+            }
+            else if(pick.pickedPoint) {
+                if(!ghostPlaceableId) makePlaceable(pick);
+                const physicsWorker = (this.__node.graph as WorkerService).workers[(ctx as WorkerCanvas).physicsPort];
+                if(ghostPlaceable) {
+                    let position = {
+                        x:pick.pickedPoint.x + placeable[placing].position.x,
+                        y:pick.pickedPoint.y + placeable[placing].position.y,
+                        z:pick.pickedPoint.z + placeable[placing].position.z
+                    } 
+                    physicsWorker.post('updatePhysicsEntity', [
+                        ghostPlaceableId, { 
+                            position 
+                        }
+                    ]);
+
+                    ghostPlaceable.position.set(position.x,position.y,position.z); //update manually as it is considered unmoving on the physics thread
+                }
+            }
+        }
+
+        let place = () => {
+            let pick = scene.pick(scene.pointerX, scene.pointerY, (mesh) => { 
+                if(ghostPlaceable && mesh.id === ghostPlaceableId) return false;
+                else return true;  
+            });
+            if(pick.pickedPoint) {
+                let settings = recursivelyAssign({}, placeable[placing]);
+                if('dynamic' in settings) settings.dynamic = true;
+                if(pick.pickedMesh?.id && placed[pick.pickedMesh.id]) { //remove existing mesh
+                    this.__node.graph.run('removeEntity', pick.pickedMesh.id);
+                    delete placed[pick.pickedMesh.id];
+                }
+                else if(pick.pickedPoint && ghostPlaceable) { //place new mesh
+                    settings.position.x += pick.pickedPoint.x;
+                    settings.position.y += pick.pickedPoint.y;
+                    settings.position.z += pick.pickedPoint.z;
+                    settings._id = `placeable${Math.floor(Math.random()*1000000000000000)}`;
+                    this.__node.graph.run('addEntity', settings, ctx);
+                    placed[settings._id] = scene.getMeshById(settings._id) as BABYLON.Mesh;
+                    removeGhostPlaceable();
+                }
+            }
+        }
+
+        // let sphereCast = () => {
+        //     if((ctx as WorkerCanvas).physicsPort) {
+        //         const physicsWorker = this.__node.graph.workers[(ctx as WorkerCanvas).physicsPort];
+                
+        //         physicsWorker.run('sphereCast', [mesh.position, ])
+        //     }
+        // }; //activate crowd members in proximity when crossing a ray or sphere cast (i.e. vision)
 
         let wobserver, aobserver, sobserver, dobserver, ctrlobserver, spaceobserver, shiftobserver;
 
         //implement above controls with these event listeners
+        // TODO: Generalizer this to a keymapping object and just set the functions for the corresponding keys e.g. to allow quick remapping
         let keydownListener = (ev) => {
-            if(ev.keyCode === 87 || ev.keycode === 38) {
+            let pass;
+            if(ev.keyCode === 87 || ev.keycode === 38) { //w or arrow up
                 if(!wobserver) wobserver = scene.onBeforeRenderObservable.add(forward);
+                pass = true;
             }
-            if(ev.keyCode === 65 || ev.keycode === 37) {
+            if(ev.keyCode === 65 || ev.keycode === 37) { //a or arrow left
                 if(!aobserver) aobserver = scene.onBeforeRenderObservable.add(left);
+                pass = true;
             }
-            if(ev.keyCode === 83 || ev.keycode === 40) {
+            if(ev.keyCode === 83 || ev.keycode === 40) { //s or arrow down
                 if(!sobserver) sobserver = scene.onBeforeRenderObservable.add(backward);
+                pass = true;
             }
-            if(ev.keyCode === 68 || ev.keycode === 39) {
+            if(ev.keyCode === 68 || ev.keycode === 39) { //d or arrow right
                 if(!dobserver) dobserver = scene.onBeforeRenderObservable.add(right);
+                pass = true;
             }
-            if(ev.keyCode === 16) {
+            if(ev.keyCode === 16) { //shift key
                 if(!shiftobserver) shiftobserver = scene.onBeforeRenderObservable.add(run);
+                pass = true;
             }
-            if(ev.keyCode === 17) {
+            if(ev.keyCode === 17) { //ctrl key
                 if(!ctrlobserver) ctrlobserver = scene.onBeforeRenderObservable.add(walk);
+                pass = true;
             }
-            if(ev.keyCode === 32) {
+            if(ev.keyCode === 32) { //space key
                 if(!spaceobserver) spaceobserver = scene.onBeforeRenderObservable.add(jump);
+                pass = true;
+            }
+
+            if(ev.keyCode === 9) { //tab
+                pass = true;
+            }
+
+            if(ev.keyCode === 18) { //alt
+                mode = 1;
+                pass = true;
+                //placement mode
+            }
+
+            if(ev.keyCode === 81) { //q
+                pass = true;
+            }
+
+            if(ev.keyCode === 69) { //e
+                pass = true;
+            }
+
+            if(ev.keyCode === 70) { //f
+                pass = true;
+            }
+
+            if(ev.keyCode === 82) { //r
+                pass = true;
+            }
+
+            if(ev.keyCode === 86) { //v
+                pass = true;
+            }
+
+            if(ev.keyCode === 67) { //c
+                pass = true;
+            }
+
+            if(ev.keyCode === 90) { //z 
+                pass = true;
+            }
+
+            if(ev.keyCode === 88) { //x
+                pass = true;
+            }
+
+            if(ev.keyCode === 8) { //esc
+                pass = true;
+            }
+
+            if(ev.keyCode === 27) { //backspace
+                pass = true;
+            }
+
+            if(pass) {
+                if(ev.preventDefault) ev.preventDefault();
             }
         };
         
         let keyupListener = (ev) => {
+            let pass;
             if(ev.keyCode === 87 || ev.keycode === 38) {
                 if(wobserver) {
                     scene.onBeforeRenderObservable.remove(wobserver);
                     wobserver = null;
                 }
+                pass = true;
             }
             if(ev.keyCode === 65 || ev.keycode === 37) {
                 if(aobserver) {
                     scene.onBeforeRenderObservable.remove(aobserver);
                     aobserver = null;
                 }
+                pass = true;
             }
             if(ev.keyCode === 83 || ev.keycode === 40) {
                 if(sobserver) {
                     scene.onBeforeRenderObservable.remove(sobserver);
                     sobserver = null;
                 }
+                pass = true;
             }
             if(ev.keyCode === 68 || ev.keycode === 39) {
                 if(dobserver) {
                     scene.onBeforeRenderObservable.remove(dobserver);
                     dobserver = null;
                 }
+                pass = true;
             }
             if(ev.keyCode === 16) {
                 if(shiftobserver) {
@@ -453,6 +673,7 @@ export const babylonRoutes = {
                     normalSpeed();
                     shiftobserver = null;
                 }
+                pass = true;
             }
             if(ev.keyCode === 17) {
                 if(ctrlobserver) {
@@ -460,30 +681,131 @@ export const babylonRoutes = {
                     normalSpeed();
                     ctrlobserver = null;
                 }
+                pass = true;
             }
             if(ev.keyCode === 32) {
                 if(spaceobserver) {
                     scene.onBeforeRenderObservable.remove(spaceobserver);
                     spaceobserver = null;
                 }
+                pass = true;
+            }
+
+            if(ev.keyCode === 81) { //q
+                pass = true;
+
+            }
+
+            if(ev.keyCode === 69) { //e
+                pass = true;
+
+            }
+
+            if(ev.keyCode === 70) { //f
+                pass = true;
+
+            }
+
+            if(ev.keyCode === 82) { //r
+                pass = true;
+
+            }
+
+            if(ev.keyCode === 86) { //v
+                pass = true;
+                
+            }
+
+            if(ev.keyCode === 67) { //c
+                pass = true;
+
+            }
+
+            if(ev.keyCode === 90) { //z 
+                pass = true;
+                swapCameras();
+            }
+
+            if(ev.keyCode === 88) { //x
+                pass = true;
+            }
+
+            if(ev.keyCode === 8) {//backspace
+                pass = true;
+                cleanupControls();
+            }
+
+            if(ev.keyCode === 9) { //tab
+                pass = true;
+
+            }
+            if(ev.keyCode === 16) { //shift
+                pass = true;
+            }
+
+            if(ev.keyCode === 18) { //alt
+                mode = 0; //placement mode
+                removeGhostPlaceable();
+                pass = true;
+            }
+
+            if(ev.keyCode === 8) { //esc
+                pass = true;
+            }
+
+            if(pass) {
+                if(ev.preventDefault) ev.preventDefault();
             }
         };
-        let mouseupListener = (ev) => {
 
+
+        let mouseupListener = (ev:MouseEvent) => {
+            if(ev.preventDefault) ev.preventDefault();
         };
-        let mousedownListener = (ev) => {
-            shoot();
+        let mousedownListener = (ev:MouseEvent) => {
+            if(mode === 0) shoot();
+            if (mode === 1) place(); 
+
+            if(ev.preventDefault) ev.preventDefault();
         };
         let mousemoveListener = (ev) => {
             if(cameraMode === 'topdown') topDownLook(ev);
             else fpsLook(ev);
+
+            if(mode === 1) {
+                hoverPlacement();
+            }
         };
+
+        let mousewheelListener = (ev:WheelEvent) => {
+            if(mode === 1) {
+                if(ev.deltaY) { //scroll the list of placeables 
+                    let keys = Object.keys(placeable);
+                    let curIdx = keys.indexOf(placing);
+                    if(ev.deltaY > 0) {
+                        curIdx++;
+                        if(curIdx >= keys.length) curIdx = 0;
+                        removeGhostPlaceable();
+                        placing = keys[curIdx];
+                        hoverPlacement();
+                    }
+                    if(ev.deltaY < 0) {
+                        curIdx--;
+                        if(curIdx < 0 ) curIdx = keys.length-1;
+                        removeGhostPlaceable();
+                        placing = keys[curIdx];
+                        hoverPlacement();
+                    }
+                }
+            }
+        }
 
         canvas.addEventListener('keydown', keydownListener);
         canvas.addEventListener('keyup', keyupListener);
         canvas.addEventListener('mousedown', mousedownListener);
         canvas.addEventListener('mouseup', mouseupListener);
         canvas.addEventListener('mousemove', mousemoveListener);
+        canvas.addEventListener('wheel', mousewheelListener);
 
         let __ondisconnected = () => {
             if(cameraobs) scene.onBeforeRenderObservable.remove(cameraobs);
@@ -505,6 +827,7 @@ export const babylonRoutes = {
             mousedownListener,
             mouseupListener,
             mousemoveListener,
+            mousewheelListener,
             __ondisconnected
         }; //controls you can pop off the canvas
 
@@ -536,21 +859,27 @@ export const babylonRoutes = {
         if(controls.mouseupListener) canvas.removeEventListener('mouseup', controls.mouseupListener);
         if(controls.mousedownListener) canvas.removeEventListener('mousedown', controls.mousedownListener);
         if(controls.mousemoveListener) canvas.removeEventListener('mousemove', controls.mousemoveListener);
+        if(controls.mousewheelListener) canvas.removeEventListener('wheel', controls.mousewheelListener);
         
-        //remove any active controls
-        if(controls.keyupListener){
-            controls.keyupListener({keyCode:87});
-            controls.keyupListener({keyCode:65});
-            controls.keyupListener({keyCode:83});
-            controls.keyupListener({keyCode:68});
-            controls.keyupListener({keyCode:16});
-            controls.keyupListener({keyCode:17});
-            controls.keyupListener({keyCode:32});
-        }
-        if(controls.mouseupListener) controls.mouseupListener();
+        //remove any active controls observers (wasd, ctrl, space, shift)
 
-        if(controls.__ondisconnected) controls.__ondisconnected();
-
+        requestAnimationFrame(() => { //for whatever reason the controls don't remove right away so this makes sure we don't overlap events on accident
+            if(controls.keyupListener){
+                controls.keyupListener({keyCode:87});
+                controls.keyupListener({keyCode:65});
+                controls.keyupListener({keyCode:83});
+                controls.keyupListener({keyCode:68});
+                controls.keyupListener({keyCode:16});
+                controls.keyupListener({keyCode:17});
+                controls.keyupListener({keyCode:32});
+            }
+    
+            if(controls.mouseupListener) controls.mouseupListener({});
+    
+            if(controls.__ondisconnected) controls.__ondisconnected();
+    
+        })
+        
         ctx.controls = null;
 
     },
@@ -595,47 +924,57 @@ export const babylonRoutes = {
         if(!camera) return undefined;
 
         let w = () => {
-            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Forward().scaleInPlace(camera.speed)))
+            const move = camera.getDirection(BABYLON.Vector3.Forward()).scaleInPlace(camera.speed);
+            camera.position.addInPlace(move);
         }
         let a = () => {
-            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Left().scaleInPlace(camera.speed)))
+            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Left()).scaleInPlace(camera.speed));
         }
         let s = () => {
-            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Backward().scaleInPlace(camera.speed)))
+            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Backward()).scaleInPlace(camera.speed));
         }
         let d = () => {
-            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Right().scaleInPlace(camera.speed)))
+            camera.position.addInPlace(camera.getDirection(BABYLON.Vector3.Right()).scaleInPlace(camera.speed));
         }
         let ctrl = () => {
-            camera.position.addInPlace(BABYLON.Vector3.Down().scaleInPlace(camera.speed))
+            camera.position.addInPlace(BABYLON.Vector3.Down().scaleInPlace(camera.speed));
         }
         let space = () => {
-            camera.position.addInPlace(BABYLON.Vector3.Up().scaleInPlace(camera.speed))
+            camera.position.addInPlace(BABYLON.Vector3.Up().scaleInPlace(camera.speed));
         }
 
         let wobserver, aobserver, sobserver, dobserver, ctrlobserver, spaceobserver;
         //need to set custom controls
         
         let keydownListener = (ev:any) => { //these key events are proxied from main thread
+
+            let pass;
             if(ev.keyCode === 87 || ev.keycode === 38) {
                 if(!wobserver) wobserver = scene.onBeforeRenderObservable.add(w);
+                pass = true;
             }
             if(ev.keyCode === 65 || ev.keycode === 37) {
                 if(!aobserver) aobserver = scene.onBeforeRenderObservable.add(a);
+                pass = true;
             }
             if(ev.keyCode === 83 || ev.keycode === 40) {
                 if(!sobserver) sobserver = scene.onBeforeRenderObservable.add(s);
+                pass = true;
             }
             if(ev.keyCode === 68 || ev.keycode === 39) {
                 if(!dobserver) dobserver = scene.onBeforeRenderObservable.add(d);
+                pass = true;
             }
             if(ev.keyCode === 17) {
                 if(!ctrlobserver) ctrlobserver = scene.onBeforeRenderObservable.add(ctrl);
+                pass = true;
             }
             if(ev.keyCode === 32) {
                 if(!spaceobserver) spaceobserver = scene.onBeforeRenderObservable.add(space);
+                pass = true;
             }
             //console.log(ev);
+            if(pass) ev.preventDefault();
         }
         
         canvas.addEventListener('keydown', keydownListener);
@@ -720,9 +1059,13 @@ export const babylonRoutes = {
         }; //controls you can pop off the canvas
 
     },
+
+
+    
     addEntity:function (
         settings:PhysicsEntityProps,
-        ctx?:string|WorkerCanvas
+        ctx?:string|WorkerCanvas,
+        onInit?:boolean
     ) {
         if(!ctx || typeof ctx === 'string')
             ctx = this.__node.graph.run('getCanvas',ctx);
@@ -821,7 +1164,7 @@ export const babylonRoutes = {
                 {
                     __node:{ tag:settings._id },
                     __ondisconnected:function (node) {
-                        this.__node.graph.run('removeBabylonEntity', settings._id, ctx);
+                        this.__node.graph.run('removeEntity', settings._id, ctx);
                     }
                 }
             );
@@ -835,17 +1178,19 @@ export const babylonRoutes = {
                 const physicsWorker = this.__node.graph.workers[ctx.physicsPort];
                 (physicsWorker as WorkerInfo).post('addPhysicsEntity', [settings]);
             }
-            if(ctx.navPort) {
-                const navWorker = this.__node.graph.workers[ctx.navPort];
-                (navWorker as WorkerInfo).post('addEntity', [settings]); //duplicate entities for the crowd navigation thread e.g. to add agents, obstacles, etc.
-                if(settings.crowd) {
-                    (navWorker as WorkerInfo).post('addCrowdAgent', [settings._id, settings.crowd, ctx._id]);
-                }
-                if(settings.targetOf) {
-                    (navWorker as WorkerInfo).post('setCrowdTarget', [settings._id, settings.targetOf, ctx._id]);
-                }
-                if(settings.navMesh) {
-                    (navWorker as WorkerInfo).post('addToNavMesh', [settings._id, settings.navMesh, ctx._id]);
+            if(!onInit) {
+                if(ctx.navPort) {
+                    const navWorker = this.__node.graph.workers[ctx.navPort];
+                    (navWorker as WorkerInfo).post('addEntity', [settings]); //duplicate entities for the crowd navigation thread e.g. to add agents, obstacles, etc.
+                    if(settings.crowd) {
+                        (navWorker as WorkerInfo).post('addCrowdAgent', [settings._id, settings.crowd, ctx._id]);
+                    }
+                    if(settings.targetOf) {
+                        (navWorker as WorkerInfo).post('setCrowdTarget', [settings._id, settings.targetOf, ctx._id]);
+                    }
+                    if(settings.navMesh) {
+                        (navWorker as WorkerInfo).post('addToNavMesh', [settings._id, settings.navMesh, ctx._id]);
+                    }
                 }
             }
         }
@@ -936,7 +1281,7 @@ export const babylonRoutes = {
 
         return data; //echo for chaining threads
     },
-    removeBabylonEntity:function (
+    removeEntity:function (
         _id:string,
         ctx?:string|WorkerCanvas
     ) {
@@ -990,7 +1335,7 @@ export const babylonRoutes = {
 
         if(ctx.navPort) {
             const navWorker = this.__node.graph.workers[ctx.navPort];
-            (navWorker as WorkerInfo).post('removeBabylonEntity', mesh.id);
+            (navWorker as WorkerInfo).post('removeEntity', mesh.id);
         }
         if(ctx.physicsPort) {
             const physicsWorker = this.__node.graph.workers[ctx.physicsPort];
@@ -1005,6 +1350,9 @@ export const babylonRoutes = {
 
         return _id; //echo id for physics and nav threads to remove to remove by subscribing
     },
+
+
+
 
     createNavMeshData: async (data) => {
         // get message datas
@@ -1444,18 +1792,13 @@ export const babylonRoutes = {
             let agentVelocity = path.subtract(e.position).normalize().scaleInPlace(4);
             //let path = crowd.getAgentNextTargetPath(i)
 
-            //braking (wip)
-            let dir: BABYLON.Vector3;
-            if(e.rotationQuaternion) dir = e.rotationQuaternion?.toEulerAngles();
-            else dir = e.rotation;
-            
 
             //todo: enable specific parameters to update accelerations
             let _fps = 1/fps;
-            let acceleration = {
-                x:(agentVelocity.x - dir.x)*_fps, 
-                y:(agentVelocity.y - dir.y)*_fps,
-                z:(agentVelocity.z - dir.z)*_fps
+            let addVelocity = {
+                x:(agentVelocity.x)*_fps, 
+                y:(agentVelocity.y)*_fps,
+                z:(agentVelocity.z)*_fps
             };
 
             // if(needsUpdate) { //provides a stronger direction change impulse
@@ -1464,7 +1807,7 @@ export const babylonRoutes = {
             //     acceleration.z += agentVelocity.z;
             // }
 
-            agentUpdates[e.id] = {acceleration};
+            agentUpdates[e.id] = {addVelocity};
         })
 
         return agentUpdates;
