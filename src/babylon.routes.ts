@@ -1338,8 +1338,8 @@ export const babylonRoutes = {
             }
         }
 
-        (this.__node.graph as WorkerService).remove(_id); //remove if not removed already
         delete ctx.entities[_id];
+        (this.__node.graph as WorkerService).remove(_id); //remove if not removed already
 
         if(ctx.navPort) {
             const navWorker = this.__node.graph.workers[ctx.navPort];
