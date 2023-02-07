@@ -1597,11 +1597,17 @@ export const babylonRoutes = {
             ctx = this.__node.graph.run('getCanvas', ctx);
         if(typeof ctx !== 'object') return undefined;
         
-        const scene = ctx.scene;
+        const scene = ctx.scene as BABYLON.Scene;
 
         let navmeshdebug:BABYLON.Mesh;
-        if(!scene.getMeshById('navMeshDebug')) navmeshdebug = new BABYLON.Mesh('navDebugMesh', scene);
-        else navmeshdebug = scene.getMeshById('navMeshDebug');
+
+        if(scene.getMeshById('navDebugMesh')) {
+            let existing = scene.getMeshById('navDebugMesh') as BABYLON.AbstractMesh;
+            scene.removeMesh(existing);
+            scene.removeMaterial(existing.material as BABYLON.Material);
+        }
+
+        navmeshdebug = new BABYLON.Mesh('navDebugMesh', scene);
 
         let vertexData = new BABYLON.VertexData();
         vertexData.positions = data;
