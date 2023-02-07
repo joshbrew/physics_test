@@ -16,7 +16,9 @@ import Recast from  "recast-detour"
 
 declare var WorkerGlobalScope;
 
-type PhysicsMesh = BABYLON.Mesh & { contacts?:string[], dynamic?:boolean | "kinematicP" | "kinematicV" , collisionType?:string };
+type PhysicsMesh = BABYLON.Mesh & { 
+    contacts?:string[], 
+    dynamic?:boolean | "kinematicP" | "kinematicV" , collisionType?:string, navMesh?:boolean, crowd?:string };
 
 function recursivelyAssign (target,obj) {
     for(const key in obj) {
@@ -445,7 +447,7 @@ export const babylonRoutes = {
                 collisionType:'cuboid',
                 dimensions:{height:1, width:1, depth:1},
                 mass:10,
-                dynamic:false,
+                dynamic:true,
                 position:{x:0, y:0.5, z:0}
             } as Partial<PhysicsEntityProps>,
             wall: {
@@ -471,6 +473,11 @@ export const babylonRoutes = {
             }
             settings._id = `placeable${Math.floor(Math.random()*1000000000000000)}`;
             settings.sensor = true;
+            delete settings.dynamic;
+            delete settings.navMesh;
+            delete settings.crowd;
+            delete settings.targetOf;
+
             this.__node.graph.run('addEntity', settings, ctx);
             ghostPlaceableId = settings._id;
             ghostPlaceable = scene.getMeshById(ghostPlaceableId) as BABYLON.Mesh;
@@ -522,7 +529,6 @@ export const babylonRoutes = {
             });
             if(pick.pickedPoint) {
                 let settings = recursivelyAssign({}, placeable[placing]);
-                if('dynamic' in settings) settings.dynamic = true;
                 if(pick.pickedMesh?.id && placed[pick.pickedMesh.id]) { //remove existing mesh
                     this.__node.graph.run('removeEntity', pick.pickedMesh.id);
                     delete placed[pick.pickedMesh.id];
@@ -1137,6 +1143,8 @@ export const babylonRoutes = {
         if(entity) {
 
             entity.dynamic = settings.dynamic;
+            entity.crowd = settings.crowd;
+            entity.navMesh = settings.navMesh;
             entity.collisionType = settings.collisionType;
 
             if(settings.position) {
@@ -1164,14 +1172,15 @@ export const babylonRoutes = {
                 {
                     __node:{ tag:settings._id },
                     __ondisconnected:function (node) {
-                        this.__node.graph.run('removeEntity', settings._id, ctx);
+                        if((ctx as WorkerCanvas).entities[(entity as PhysicsMesh).id]) this.__node.graph.run('removeEntity', settings._id, ctx);
                     }
                 }
             );
 
             node.__proxyObject(entity);
             
-            ctx[entity.id] = settings;
+            if(!ctx.entities) ctx.entities = {};
+            ctx.entities[entity.id] = settings;
 
             //todo: check for redundancy
             if(ctx.physicsPort) {
@@ -1183,13 +1192,13 @@ export const babylonRoutes = {
                     const navWorker = this.__node.graph.workers[ctx.navPort];
                     (navWorker as WorkerInfo).post('addEntity', [settings]); //duplicate entities for the crowd navigation thread e.g. to add agents, obstacles, etc.
                     if(settings.crowd) {
-                        (navWorker as WorkerInfo).post('addCrowdAgent', [settings._id, settings.crowd, ctx._id]);
+                        (navWorker as WorkerInfo).post('addCrowdAgent', [settings._id, settings.crowd, undefined, ctx._id]);
                     }
                     if(settings.targetOf) {
                         (navWorker as WorkerInfo).post('setCrowdTarget', [settings._id, settings.targetOf, ctx._id]);
                     }
                     if(settings.navMesh) {
-                        (navWorker as WorkerInfo).post('addToNavMesh', [settings._id, settings.navMesh, ctx._id]);
+                        (navWorker as WorkerInfo).post('addToNavMesh', [[settings._id], ctx._id]);
                     }
                 }
             }
@@ -1295,38 +1304,37 @@ export const babylonRoutes = {
         // const engine = ctx.engine as BABYLON.Engine;
         const scene = ctx.scene as BABYLON.Scene;
 
-        let mesh = scene.getMeshByName(_id);
+        let mesh = scene.getMeshByName(_id) as PhysicsMesh;
         if(!mesh) return undefined; //already removed
 
-        if(ctx.entities[_id]) {
-            if(ctx.crowds) {
-                if(ctx.entities[_id].crowdId) {
-                    ctx.crowds[ctx.entities[_id].crowdId].entities.find((o,i) => { 
-                        if(o.id === _id) {
-                            ((ctx as any).crowds[(ctx as any).entities[_id].crowdId].crowd as BABYLON.ICrowd).removeAgent(i);
-                            (ctx as any).crowds[(ctx as any).entities[_id].crowdId].entities.splice(i,1);
-                            return true;
-                        } 
-                    });
-                }
+        if(ctx.crowds) {
+            if(mesh.crowd) {
+                ctx.crowds[mesh.crowd].entities.find((o,i) => { 
+                    if(o.id === _id) {
+                        ((ctx as any).crowds[(ctx as any).entities[_id].crowdId].crowd as BABYLON.ICrowd).removeAgent(i);
+                        (ctx as any).crowds[(ctx as any).entities[_id].crowdId].entities.splice(i,1);
+                        return true;
+                    } 
+                });
             }
-            if(ctx.navMesh) {
-                if(ctx.entities[_id].navMesh && ctx.navMesh) {
-                    ctx.navMesh.meshesToMerge.find((o,i) => {
-                        if(o.id === _id) {
-                            ((ctx as any).navMesh.meshesToMerge as BABYLON.Mesh[]).splice(i,1);
-                            this.__node.graph.run(
-                                'createNavMesh',  
-                                (ctx as any).navMesh.meshesToMerge,  
-                                (ctx as any).navMesh.navMeshParameters, 
-                                (ctx as any).navMesh.debug,
-                                (ctx as any).navMesh.sendDebug,
-                                undefined,
-                                (ctx as any)._id
-                            );
-                        }
-                    })
-                }
+        }
+        if(ctx.navMesh) {
+            if(mesh.navMesh && ctx.navMesh) {
+                ctx.navMesh.meshesToMerge.find((o,i) => {
+                    if(o.id === _id) {
+                        ((ctx as any).navMesh.meshesToMerge as BABYLON.Mesh[]).splice(i,1);
+                        this.__node.graph.run(
+                            'createNavMesh',  
+                            (ctx as any).navMesh.meshesToMerge,  
+                            (ctx as any).navMesh.navMeshParameters, 
+                            (ctx as any).navMesh.debug,
+                            (ctx as any).navMesh.sendDebug,
+                            undefined,
+                            (ctx as any)._id
+                        );
+                        return true;
+                    }
+                })
             }
         }
 
@@ -1337,6 +1345,7 @@ export const babylonRoutes = {
             const navWorker = this.__node.graph.workers[ctx.navPort];
             (navWorker as WorkerInfo).post('removeEntity', mesh.id);
         }
+
         if(ctx.physicsPort) {
             const physicsWorker = this.__node.graph.workers[ctx.physicsPort];
             (physicsWorker as WorkerInfo).post('removePhysicsEntity', mesh.id);
@@ -1453,7 +1462,7 @@ export const babylonRoutes = {
             walkableSlopeAngle: 90,
             walkableHeight: 10.0,
             walkableClimb: 3,
-            walkableRadius: 1,
+            walkableRadius: 3,
             maxEdgeLen: 12.,
             maxSimplificationError: 1.3,
             minRegionArea: 8,
@@ -1465,7 +1474,7 @@ export const babylonRoutes = {
 
         if(params) Object.assign(navMeshParameters,params);
 
-        let merged = BABYLON.Mesh.MergeMeshes(meshesToMerge as BABYLON.Mesh[], false);
+        let merged = BABYLON.Mesh.MergeMeshes(meshesToMerge as BABYLON.Mesh[], false, true);
 
         //@ts-ignore
         if(!nav._worker) {
@@ -1479,6 +1488,7 @@ export const babylonRoutes = {
 
         const withNavMesh = (navMeshData:Uint8Array) => {
             //console.log(navMeshData);
+            
             (ctx as WorkerCanvas).navMesh = {
                 navMeshData, 
                 merged, 
@@ -1517,6 +1527,7 @@ export const babylonRoutes = {
                 navMeshParameters, 
                 (navMeshData) => {
                     let created = withNavMesh(navMeshData);
+                    console.log(created);
                     res(created); //will live on ctx.navMesh
                 }
             )
@@ -1535,15 +1546,45 @@ export const babylonRoutes = {
                 meshes = meshes.map((o) => { return scene.getMeshById(o); }) as BABYLON.Mesh[]; 
             }
 
+            meshes = [...meshes, ...ctx.navMesh.meshesToMerge];
+
             this.__node.graph.run(
                 'setNavMeshData', 
-                [...meshes, ctx.navMesh.merged], 
+                meshes, 
                 ctx.navMesh.navMeshParameters, 
                 ctx.navMesh.debug, 
                 ctx.navMesh.sendDebug
             );
         } else this.__node.graph.run('setNavMeshData', meshes, ctx);
 
+    },
+    removeFromNavMesh:function(mesh:string|BABYLON.Mesh, ctx?:string|WorkerCanvas) {
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+
+        if(ctx.navMesh) {
+            if(typeof mesh === 'object') {
+                mesh = mesh.id;
+                
+            }
+
+            ctx.navMesh.meshesToMerge.find((o,i) => {
+                if(o.id === mesh) {
+                    (ctx as WorkerCanvas).navMesh.meshesToMerge.splice(i,1);
+                    return true;
+                }
+            });
+
+            this.__node.graph.run(
+                'setNavMeshData', 
+                ctx.navMesh.meshesToMerge, 
+                ctx.navMesh.navMeshParameters, 
+                ctx.navMesh.debug, 
+                ctx.navMesh.sendDebug
+            );
+        }
     },
     createDebugNavMesh:function(data:Float32Array, ctx?:WorkerCanvas|string) {
 
@@ -1582,13 +1623,16 @@ export const babylonRoutes = {
         const engine = ctx.engine as BABYLON.Engine;
         const scene = ctx.scene as BABYLON.Scene;
 
-        let crowdId = `crowd${Math.floor(Math.random()*1000000000000000)}`;
+        let crowdId;
 
         if(typeof entities[0] === 'string') {
             entities = entities.map((o) => { 
-                return scene.getMeshById(o); 
+                let mesh = scene.getMeshById(o) as PhysicsMesh;
+                if(mesh.crowd) crowdId = mesh.crowd;
+                return mesh; 
             }) as BABYLON.Mesh[]; 
         }
+        if(!crowdId) crowdId = `crowd${Math.floor(Math.random()*1000000000000000)}`
 
         for(const e of entities) {
             (e as any).crowdId = crowdId;
