@@ -456,6 +456,12 @@ export const babylonRoutes = {
                 navMesh:true,
                 position:{x:0, y:5, z:0}
             } as Partial<PhysicsEntityProps>,
+            wall2: {
+                collisionType:'cuboid',
+                dimensions:{height:10, width:1, depth:10},
+                navMesh:true,
+                position:{x:0, y:5, z:0}
+            } as Partial<PhysicsEntityProps>,
             platform: {
                 collisionType:'cuboid',
                 dimensions:{width:10,height:1,depth:10},
@@ -1067,7 +1073,6 @@ export const babylonRoutes = {
     },
 
 
-    
     addEntity:function (
         settings:PhysicsEntityProps,
         ctx?:string|WorkerCanvas,
@@ -1332,6 +1337,9 @@ export const babylonRoutes = {
                             undefined,
                             (ctx as any)._id
                         );
+
+                        
+
                         return true;
                     }
                 })
@@ -1462,7 +1470,7 @@ export const babylonRoutes = {
             walkableSlopeAngle: 90,
             walkableHeight: 10.0,
             walkableClimb: 3,
-            walkableRadius: 3,
+            walkableRadius: 5,
             maxEdgeLen: 12.,
             maxSimplificationError: 1.3,
             minRegionArea: 8,
@@ -1499,6 +1507,19 @@ export const babylonRoutes = {
             };
             
             nav.buildFromNavmeshData(navMeshData);
+
+            //now we need to remake the crowds to account for the new navmesh data
+            if((ctx as WorkerCanvas).crowds) {
+                for(const key in (ctx as WorkerCanvas).crowds) {
+                    this.__node.graph.run(
+                        'createCrowd', 
+                        (ctx as WorkerCanvas).crowds[key].entities, 
+                        (ctx as WorkerCanvas).crowds[key].target, 
+                        (ctx as WorkerCanvas).crowds[key].agentParams, 
+                        ctx
+                    );
+                }
+            }
 
             //-------------------------
             //----------debug----------
@@ -1561,6 +1582,7 @@ export const babylonRoutes = {
                 ctx.navMesh.debug, 
                 ctx.navMesh.sendDebug
             );
+
         } else this.__node.graph.run('setNavMeshData', meshes, ctx);
 
     },
@@ -1621,7 +1643,7 @@ export const babylonRoutes = {
         matdebug.alpha = 0.2;
         navmeshdebug.material = matdebug;
 
-        console.log(navmeshdebug);
+        //console.log(navmeshdebug);
 
     },
     createCrowd:async function (
@@ -1640,50 +1662,77 @@ export const babylonRoutes = {
         const scene = ctx.scene as BABYLON.Scene;
 
         let crowdId;
+        if(!ctx.crowds) 
+            ctx.crowds = {};
 
         if(typeof entities[0] === 'string') {
             entities = entities.map((o) => { 
                 let mesh = scene.getMeshById(o) as PhysicsMesh;
-                if(mesh.crowd) crowdId = mesh.crowd;
                 return mesh; 
             }) as BABYLON.Mesh[]; 
         }
-        if(!crowdId) crowdId = `crowd${Math.floor(Math.random()*1000000000000000)}`
 
         for(const e of entities) {
-            (e as any).crowdId = crowdId;
+            if(!crowdId) {
+                if((e as any).crowd) crowdId = (e as any).crowd;
+                else crowdId = `crowd${Math.floor(Math.random()*1000000000000000)}`;
+            }
+            (e as any).crowd = crowdId;
+        }
+        
+        if(ctx.crowds[crowdId]) { //we are recreating this crowd
+            ctx.crowds[crowdId].animating = false; //reset the animation loop
+            (ctx.crowds[crowdId].crowd as BABYLON.ICrowd).dispose(); 
+            delete ctx.crowds[crowdId];
         }
 
         let crowd = nav.createCrowd(entities.length, 10, scene);
 
-        if(!ctx.crowds) 
-            ctx.crowds = {};
-
         if(typeof initialTarget === 'string') 
             initialTarget = scene.getMeshById(initialTarget) as BABYLON.Mesh;
             
-        ctx.crowds[crowdId] = {crowd, target:initialTarget, entities};
 
         let agentParams = {
             radius: 0.1,
             height: 0.2,
             maxAcceleration: 4.0,
             maxSpeed: 1.0,
-            collisionQueryRange: 0.5,
+            collisionQueryRange: 3,
             pathOptimizationRange: 0.1,
             separationWeight: 1.0
         } as BABYLON.IAgentParameters;
 
         if(params) Object.assign(agentParams, params);
 
+        let obj = {crowd, target:initialTarget, entities, agentParams, animating:true};
+        ctx.crowds[crowdId] = obj;
+
         entities.forEach((entity) => {
+            if(scene.getTransformNodeById(`${entity.id}TransformNode`)) scene.removeTransformNode(scene.getTransformNodeById(`${entity.id}TransformNode`) as BABYLON.TransformNode);
             let transform = new BABYLON.TransformNode(`${entity.id}TransformNode`, scene);
             let point = nav.getClosestPoint(entity.position);
             crowd.addAgent(point, agentParams, transform);
         })
 
         if(typeof initialTarget === 'object') {
-            let point = nav.getClosestPoint(initialTarget.position as BABYLON.Vector3);
+            let pick = () => {
+                if(!initialTarget) return;
+                let direction = BABYLON.Vector3.Down();
+                let picked = scene.pickWithRay(
+                    new BABYLON.Ray((initialTarget as BABYLON.Mesh).position, direction), 
+                    (m) => { if(m.id === (initialTarget as BABYLON.Mesh).id) return false; else return true;}
+                );
+               
+                return picked;
+            }
+
+            let point;
+            if(initialTarget) {
+                const picked = pick();
+                if(picked?.pickedPoint) {
+                    point = nav.getClosestPoint(picked.pickedPoint); //projected point ensures better navmesh solving
+                } else point = nav.getClosestPoint(initialTarget.position);
+            }
             crowd.getAgents().forEach((i) => {
                 crowd.agentGoto(i, point); 
             });
@@ -1691,8 +1740,9 @@ export const babylonRoutes = {
 
         let tick = 0;
 
-        (ctx as WorkerCanvas).crowds[crowdId].animating = true;
         let obsv = () => {//scene.onBeforeRenderObservable.add(() => {
+            
+            if(!obj.animating) return;
             let updates = this.__node.graph.run(
                 'animateCrowd',
                 nav,
@@ -1710,8 +1760,7 @@ export const babylonRoutes = {
             //     this.__node.graph.workers[physicsPort]?.run('updatePhysicsEntities', updates);
             // }
             
-            if((ctx as WorkerCanvas).crowds[crowdId].animating)
-                requestAnimationFrame(obsv);
+            requestAnimationFrame(obsv);
         };//);
         
         requestAnimationFrame(obsv);
@@ -1738,15 +1787,7 @@ export const babylonRoutes = {
                 entity = scene.getMeshById(entity) as BABYLON.Mesh;
             }
 
-            let agentParams = {
-                radius: 0.1,
-                height: 0.2,
-                maxAcceleration: 4.0,
-                maxSpeed: 1.0,
-                collisionQueryRange: 0.5,
-                pathOptimizationRange: 0.1,
-                separationWeight: 1.0
-            } as BABYLON.IAgentParameters;
+            let agentParams = {...ctx.crowds[crowdId].agentParams} as BABYLON.IAgentParameters;
     
             if(params) Object.assign(agentParams, params);
 
@@ -1845,15 +1886,11 @@ export const babylonRoutes = {
 
         let agentUpdates = {};
 
-
         entities.forEach((e,i) => {
-            let path = crowd.getAgentNextTargetPath(i);
-            let agentVelocity = path.subtract(e.position).normalize().scaleInPlace(4);
+            let agentVelocity = crowd.getAgentVelocity(i);
             //let path = crowd.getAgentNextTargetPath(i)
-
-
             //todo: enable specific parameters to update accelerations
-            let _fps = 1/fps;
+            let _fps = 4/fps;
             let addVelocity = {
                 x:(agentVelocity.x)*_fps, 
                 y:(agentVelocity.y)*_fps,
