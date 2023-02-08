@@ -374,13 +374,13 @@ function makeCollisionGroupFilter(collisionGroups:number[], collisionFilters?:nu
 
 function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigidbody: RAPIER.RigidBody, collider?:RAPIER.ColliderDesc|RAPIER.Collider, graph?) {
     if(collider) {
-        if(settings.density) {
+        if(typeof settings.density === 'number') {
             collider.setDensity(settings.density);
         }
-        if(settings.restitution) {
+        if(typeof settings.restitution === 'number') {
             collider.setRestitution(settings.restitution);
         }
-        if(settings.mass) {
+        if(typeof settings.mass === 'number') {
             collider.setMass(settings.mass);
         } 
         if(settings.centerOfMass) {
@@ -392,7 +392,7 @@ function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigi
             );
         }
 
-        if(settings.friction) {
+        if(typeof settings.friction === 'number') {
             collider.setFriction(settings.friction);
         } 
 
@@ -416,10 +416,10 @@ function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigi
 
     if(settings.ccd) rigidbody.enableCcd(settings.ccd);
 
-    if(settings.linearDamping) {
+    if(typeof settings.linearDamping === 'number') {
         rigidbody.setLinearDamping(settings.linearDamping);
     }
-    if(settings.angularDamping) {
+    if(typeof settings.angularDamping === 'number') {
         rigidbody.setAngularDamping(settings.angularDamping)
     }
 

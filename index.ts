@@ -129,6 +129,23 @@ let graph = new WorkerService({
                 );
             }
         },
+        'controlsRef':{
+            __element:'div',
+            innerHTML:`
+                Controls:<br><br>
+                WASD or Arrows: Move Free Camera<br>
+                Space: Up<br>
+                Ctrl: Down<br>
+                Click on the capsule to take it over.<br><br>
+                With Player Capsule Controlled:<br><br>
+                Mouse Click: Shoot<br>
+                Z: Change camera view<br>
+                Backspace: Release Control back to Free Camera<br>
+                Hold Alt: Placement Mode<br>
+                Alt + Mouse Click: Place/Delete Object<br>
+                Alt + Mouse Wheel: Change Placement Type<br>
+            `
+        }
 
         // testbox:{
         //     __element:'div',
