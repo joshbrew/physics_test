@@ -1695,7 +1695,7 @@ export const babylonRoutes = {
         let agentParams = {
             radius: 0.1,
             height: 0.2,
-            maxAcceleration: 4.0,
+            maxAcceleration: 100.0,
             maxSpeed: 1.0,
             collisionQueryRange: 3,
             pathOptimizationRange: 0.1,
