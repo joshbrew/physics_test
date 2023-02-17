@@ -43,6 +43,6 @@ With ThreeJS the app is about 2MB, so the physics engine itself is <1MB bundled,
 
 ### Benchmark
 
-[benchmark](./benchmark.png)
+![benchmark](./benchmark.png)
 
 Baseline performance is on the order of microseconds. This is just with two crowd entities, a player, a number of other physics objects, and a single light source.
