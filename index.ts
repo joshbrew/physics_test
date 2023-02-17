@@ -161,6 +161,7 @@ let graph = new WorkerService({
     }
 });
 
+
 // RAPIER.init().then(() => {
     
 //     //create Rapier3D context

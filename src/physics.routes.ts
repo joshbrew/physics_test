@@ -181,7 +181,7 @@ export const physicsRoutes = {
             } else data.buffer = {};
             let idx = 0;
             let bufferValues = (body:RAPIER.RigidBody) => {
-                if(body.isMoving()) { //we don't need to buffer static body positions as they are assumed fixed and/or externally updated
+                if(body.isMoving()) { //we don't need to buffer static or kinematic body positions as they are assumed fixed and/or externally updated
                     if(buffered) {
                         let offset = idx*7;
                         let position = body.translation();

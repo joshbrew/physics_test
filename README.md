@@ -1,5 +1,13 @@
 # physics_test
- Rapier3D + BablyonJS test
+Rapier3D + BablyonJS test
+
+BabylonJS for rendering. Rapier3D for scene collision and scripting interactions. All entities are physics-based and update the render thread.
+
+Physics thread relays through a crowd navigation and dynamic nav mesh thread to enable AI behaviors.
+
+BabylonJS thread handles only the render updating while positions and states etc. are determined by the AI and physics threads. 
+
+Main thread just passes user inputs to babylonjs to update the render with simple vector calc.
 
 ### To run:
 
@@ -25,7 +33,16 @@ With ThreeJS the app is about 2MB, so the physics engine itself is <1MB bundled,
 ### TODO
 
 - Proper AI controls e.g. targeting, snappier impulses
-- Pushing/popping entities across threads with proper cleanup/init
-- Turn capsule into player character
+    -- independent targeting, states, etc (easy shit)
+    -- Use boid grouping behaviors for idle state, cast each AI on init to group the boids within their visible boundaries. Casting = Project a sphere in rapier3d to determine overlaps within a specific radius, then raycast to each overlapping entity to determine if they are in line-of-sight.
+
 - Make obstacle course to run through and avoid the AI
 - Raycast activation for AI based on player visibility (cast from the player to keep this efficient)
+- Figure out if BabylonJS has any bulk lighting solution e.g. global illumination.
+
+
+### Benchmark
+
+[benchmark](./benchmark.png)
+
+Baseline performance is on the order of microseconds. This is just with two crowd entities, a player, a number of other physics objects, and a single light source.

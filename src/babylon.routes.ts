@@ -10,7 +10,7 @@ import {
 } from 'graphscript'
 
 import * as BABYLON from 'babylonjs'
-import { PhysicsEntityProps } from '../src/types';
+import { PhysicsEntityProps, Vec3 } from '../src/types';
 
 import Recast from  "recast-detour"
 
@@ -18,7 +18,9 @@ declare var WorkerGlobalScope;
 
 type PhysicsMesh = BABYLON.Mesh & { 
     contacts?:string[], 
-    dynamic?:boolean | "kinematicP" | "kinematicV" , collisionType?:string, navMesh?:boolean, crowd?:string };
+    dynamic?:boolean | "kinematicP" | "kinematicV" , collisionType?:string, navMesh?:boolean, 
+    crowd?:string, agentState?:string|number, patrol?:Vec3[], origin?:Vec3
+};
 
 function recursivelyAssign (target,obj) {
     for(const key in obj) {
@@ -1704,14 +1706,27 @@ export const babylonRoutes = {
 
         if(params) Object.assign(agentParams, params);
 
-        let obj = {crowd, target:initialTarget, entities, agentParams, animating:true};
+        let obj = {
+            crowd, 
+            target:initialTarget, 
+            entities, 
+            agentParams, 
+            animating:true
+        };
+
         ctx.crowds[crowdId] = obj;
 
         entities.forEach((entity) => {
-            if(scene.getTransformNodeById(`${entity.id}TransformNode`)) scene.removeTransformNode(scene.getTransformNodeById(`${entity.id}TransformNode`) as BABYLON.TransformNode);
-            let transform = new BABYLON.TransformNode(`${entity.id}TransformNode`, scene);
-            let point = nav.getClosestPoint(entity.position);
-            crowd.addAgent(point, agentParams, transform);
+            if(typeof entity === 'object') {
+                if(scene.getTransformNodeById(`${entity.id}TransformNode`)) scene.removeTransformNode(scene.getTransformNodeById(`${entity.id}TransformNode`) as BABYLON.TransformNode);
+                let transform = new BABYLON.TransformNode(`${entity.id}TransformNode`, scene);
+                let point = nav.getClosestPoint(entity.position);
+    
+                entity.agentState = 1;
+                entity.origin = Object.assign({}, entity.position);
+    
+                crowd.addAgent(point, agentParams, transform);
+            }
         })
 
         if(typeof initialTarget === 'object') {
@@ -1795,10 +1810,38 @@ export const babylonRoutes = {
                 let transform = new BABYLON.TransformNode(`${entity.id}TransformNode`, scene);
                 let idx = crowd.addAgent(entity.position, agentParams, transform);
 
+                (entity as PhysicsMesh).agentState = 1; //0: idle/patrol, 1: pursuing target
+                ctx.crowds?.[crowdId].entities.push(entity);
+
                 if(ctx.crowds?.[crowdId].target)
                     crowd.agentGoto(idx,ctx.crowds?.[crowdId].target);
 
                 return entity.id;
+            }
+        }
+    },
+    removeCrowdAgent:function (meshId:string, ctx?:string|WorkerCanvas) {
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__node.graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+
+        // const nav = ctx.nav as BABYLON.RecastJSPlugin;
+        // const engine = ctx.engine as BABYLON.Engine;
+        const scene = ctx.scene as BABYLON.Scene;
+
+        let mesh = scene.getMeshByName(meshId) as PhysicsMesh;
+        if(!mesh) return undefined; //already removed
+
+        if(ctx.crowds) {
+            if(mesh.crowd) {
+                ctx.crowds[mesh.crowd].entities.find((o,i) => { 
+                    if(o.id === meshId) {
+                        ((ctx as any).crowds[(ctx as any).entities[meshId].crowdId].crowd as BABYLON.ICrowd).removeAgent(i);
+                        (ctx as any).crowds[(ctx as any).entities[meshId].crowdId].entities.splice(i,1);
+                        return true;
+                    } 
+                });
             }
         }
     },
@@ -1877,7 +1920,10 @@ export const babylonRoutes = {
                 }
                 else point = nav.getClosestPoint(target);
 
-                entities.forEach((e, i) => {crowd.agentGoto(i, point); });
+                entities.forEach((e:PhysicsMesh, i) => {
+                    if(e.agentState === 1) crowd.agentGoto(i, point);
+                    else if (e.agentState === 0 && e.patrol) {}  
+                });
             }
         
         }
