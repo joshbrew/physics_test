@@ -1,6 +1,9 @@
 # physics_test
 Rapier3D + BablyonJS test
 
+<img width="311" alt="Capture" src="https://github.com/joshbrew/physics_test/assets/18196383/6a4b30a1-d261-4b38-a4b0-a10109b234fd">
+
+
 BabylonJS for rendering. Rapier3D for scene collision and scripting interactions. All entities are physics-based and update the render thread.
 
 Physics thread relays through a crowd navigation and dynamic nav mesh thread to enable AI behaviors.
