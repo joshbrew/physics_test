@@ -1,6 +1,8 @@
 # physics_test
 Rapier3D + BablyonJS test
 
+[Live Demo](https://babylonrapiertest.netlify.app) (do a performance capture to see, note we aren't using instanced meshes yet so increasing geometry count may significantly impact fps)
+
 <img width="311" alt="Capture" src="https://github.com/joshbrew/physics_test/assets/18196383/6a4b30a1-d261-4b38-a4b0-a10109b234fd">
 
 
