@@ -34,7 +34,6 @@ import { createRenderer } from './renderer';
 
 let renderId = 'canvas';
 
-
 let graph = new WorkerService({
     roots:{
         ...workerCanvasRoutes,
@@ -65,6 +64,26 @@ let graph = new WorkerService({
                             dynamic:true,
                             restitution:0.1,
                             position:{x:0,y:15,z:5},
+                            impulse:{x:0,y:15,z:-20},
+                            crowd:'zombies'
+                        },
+                        {
+                            _id:'ball3',
+                            collisionType:'ball',
+                            radius:1,
+                            dynamic:true,
+                            restitution:0.1,
+                            position:{x:0,y:12,z:7},
+                            impulse:{x:0,y:15,z:-20},
+                            crowd:'zombies'
+                        },
+                        {
+                            _id:'ball4',
+                            collisionType:'ball',
+                            radius:1,
+                            dynamic:true,
+                            restitution:0.1,
+                            position:{x:0,y:11,z:6},
                             impulse:{x:0,y:15,z:-20},
                             crowd:'zombies'
                         },
@@ -125,6 +144,42 @@ let graph = new WorkerService({
                             position:{x:0,y:-10,z:0},
                             navMesh:true
                         },
+                        {
+                            _id:'leftgwall',
+                            collisionType:'cuboid',
+                            dimensions:{width:100,height:5,depth:1},
+                            dynamic:false,
+                            restitution:1,
+                            position:{x:0,y:-7.5,z:-50},
+                            navMesh:true
+                        },
+                        {
+                            _id:'rightgwall',
+                            collisionType:'cuboid',
+                            dimensions:{width:100,height:5,depth:1},
+                            dynamic:false,
+                            restitution:1,
+                            position:{x:0,y:-7.5,z:50},
+                            navMesh:true
+                        },
+                        {
+                            _id:'frontgwall',
+                            collisionType:'cuboid',
+                            dimensions:{width:1,height:5,depth:100},
+                            dynamic:false,
+                            restitution:1,
+                            position:{x:-50,y:-7.5,z:0},
+                            navMesh:true
+                        },
+                        {
+                            _id:'backgwall',
+                            collisionType:'cuboid',
+                            dimensions:{width:1,height:5,depth:100},
+                            dynamic:false,
+                            restitution:1,
+                            position:{x:50,y:-7.5,z:0},
+                            navMesh:true
+                        }
                     ]
                 );
             }
@@ -160,6 +215,7 @@ let graph = new WorkerService({
         htmlloader
     }
 });
+
 
 
 // RAPIER.init().then(() => {

@@ -55,7 +55,6 @@ export const babylonRoutes = {
                     }
                 }
                  
-
                 const engine = new BABYLON.Engine(canvas);
                 const scene = new BABYLON.Scene(engine);
 
@@ -96,7 +95,7 @@ export const babylonRoutes = {
 
                 const light = new BABYLON.SpotLight(
                     'light1', 
-                    new BABYLON.Vector3(0,30,0),
+                    new BABYLON.Vector3(0,90,0),
                     new BABYLON.Vector3(0,-1,0),
                     1,
                     2,
@@ -129,7 +128,6 @@ export const babylonRoutes = {
                 }}|number[]
             ) {
                 this.__node.graph.run('updateBabylonEntities', data);
-
             },
             clear:function (self:WorkerCanvas, canvas, context) {
                 self.scene.dispose();
