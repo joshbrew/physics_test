@@ -47,7 +47,7 @@ let graph = new WorkerService({
                     graph,
                     [
                         {
-                            _id:'ball',
+                            _id:'ball1',
                             collisionType:'ball',
                             radius:1,
                             dynamic:true,

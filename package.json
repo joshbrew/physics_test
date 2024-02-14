@@ -22,14 +22,13 @@
   "author": "",
   "license": "AGPL-3.0-or-later",
   "dependencies": {
-    "@dimforge/rapier2d-compat": "^0.10.0",
-    "@dimforge/rapier3d-compat": "^0.10.0",
-    "@types/keyboardjs": "^2.5.0",
-    "babylonjs": "^5.43.0",
-    "graphscript": "^0.2.60",
-    "keyboardjs": "^2.7.0",
-    "recast-detour": "^1.6.2",
-    "three": "^0.148.0"
+    "@dimforge/rapier3d-compat": "~0.12.0",
+    "@types/babylonjs": "^2.4.1",
+    "@types/keyboardjs": "~2.5.3",
+    "babylonjs": "~6.42.0",
+    "graphscript": "~0.3.1",
+    "keyboardjs": "~2.7.0",
+    "recast-detour": "~1.6.3"
   },
   "nodemonConfig": {
     "env": {

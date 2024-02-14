@@ -31,7 +31,6 @@ export const physicsRoutes = {
     addPhysicsEntity:function (
         settings:PhysicsEntityProps
     ) {
-
         if(!settings.collisionType) return undefined;
 
         if(settings._id && this.__node.graph.get(settings._id)) return settings._id; //already established
@@ -119,7 +118,7 @@ export const physicsRoutes = {
                 } else if (settings.dynamic === 'kinematicV') {
                     rtype = RAPIER.RigidBodyType.KinematicVelocityBased
                 } else rtype = RAPIER.RigidBodyType.Fixed;
-                rigidbody.setBodyType(rtype); //can set entity to be static or dynamic
+                rigidbody.setBodyType(rtype, true); //can set entity to be static or dynamic
             }
 
             const collider = rigidbody.collider(0);
@@ -197,7 +196,7 @@ export const physicsRoutes = {
 
                         
                         //get contact events for each body and report
-                        world.contactsWith(body.collider(0), (collider2) => {
+                        world.contactPairsWith(body.collider(0), (collider2) => {
                             if(!data.contacts[(body as any)._id]) data.contacts[(body as any)._id] = [];
                             data.contacts[(body as any)._id].push((collider2 as any).parent()._id);
                         });
@@ -208,7 +207,7 @@ export const physicsRoutes = {
                             rotation:body.rotation()
                         }
                         //get contact events for each body and report
-                        world.contactsWith(body.collider(0), (collider2) => {
+                        world.contactPairsWith(body.collider(0), (collider2) => {
                             if(!data.contacts[(body as any)._id]) data.contacts[(body as any)._id] = [];
                             data.contacts[(body as any)._id].push((collider2 as any).parent()._id);
                         });

@@ -16,7 +16,7 @@ import Recast from  "recast-detour"
 
 declare var WorkerGlobalScope;
 
-type PhysicsMesh = BABYLON.Mesh & { 
+type PhysicsMesh = (BABYLON.Mesh | BABYLON.InstancedMesh) & { 
     contacts?:string[], 
     dynamic?:boolean | "kinematicP" | "kinematicV" , collisionType?:string, navMesh?:boolean, 
     crowd?:string, agentState?:string|number, patrol?:Vec3[], origin?:Vec3
@@ -46,7 +46,7 @@ export const babylonRoutes = {
 
         const BabylonCanvasProps = {
             BABYLON,
-            init:function (self:WorkerCanvas,canvas,context) {
+            init:function (self:WorkerCanvas,canvas,ctx) {
         
                 if(typeof WorkerGlobalScope !== 'undefined' && globalThis instanceof WorkerGlobalScope) {
                     //this is a hack
@@ -60,7 +60,6 @@ export const babylonRoutes = {
 
                 self.engine = engine;
                 self.scene = scene;
-
                 self.camera = this.__node.graph.run('attachFreeCamera', self);
 
                 const cameraControls = this.__node.graph.run('addCameraControls', 0.5, self); //default camera controls
@@ -82,7 +81,13 @@ export const babylonRoutes = {
 
                     if(picked.pickedMesh?.name === 'capsule1' && self.controls?.mode !== 'player') {
                         if(self.controls) this.__node.graph.run('removeControls', self.controls, self);
-                        self.controls = this.__node.graph.run('addPlayerControls', 'capsule1', self.physicsPort, 2, 'topdown', true, self);
+                        self.controls = this.__node.graph.run(
+                            'addPlayerControls', 
+                            'capsule1', 
+                            self.physicsPort, 2, 
+                            'topdown', 
+                            self
+                        );
                         //console.log(picked.pickedMesh);
                     } 
                     else if(!self.controls) {
@@ -108,7 +113,7 @@ export const babylonRoutes = {
 
                 if(self.entities) { //settings passed from main thread as PhysicsEntityProps[]
                     let meshes = self.entities.map((e,i) => {
-                        let mesh = scene.getMeshById(this.__node.graph.run('addEntity', e, self, true)); 
+                        let mesh = scene.getNodeById(this.__node.graph.run('addEntity', e, self, true)); 
                         entityNames[i] = e._id;
                         return mesh;
                     }) as BABYLON.Mesh[];
@@ -155,14 +160,13 @@ export const babylonRoutes = {
         const engine = new BABYLON.Engine(canvas);
         const scene = new BABYLON.Scene(engine);
 
-
         ctx.canvas = canvas;
         ctx.engine = engine;
         ctx.scene = scene;
 
         //duplicating for secondary engine threads (in our case for running a standalone navmesh/crowd animation thread) 
         if(!ctx._id) ctx._id = `canvas${Math.floor(Math.random()*1000000000000000)}`;
-        
+
         if(!this.__node.graph.CANVASES) 
             this.__node.graph.CANVASES = {} as { [key:string]:WorkerCanvas };
         if(!this.__node.graph.CANVASES[ctx._id]) 
@@ -170,7 +174,7 @@ export const babylonRoutes = {
 
         if(ctx.entities) {
             let names = ctx.entities.map((e,i) => {
-                return this.__node.graph.run('addEntity', e, self, true);
+                return this.__node.graph.run('addEntity', e, (ctx as any)._id, true);
             });
 
             return names;
@@ -204,7 +208,6 @@ export const babylonRoutes = {
         physicsPort:string,
         maxSpeed:number=0.5,
         cameraMode:'topdown'|'firstperson'|'thirdperson'='topdown',
-        globalDirection:boolean=false,
         ctx?:string|WorkerCanvas
     ) {
         //attach user to object and add controls for moving the object around
@@ -286,6 +289,7 @@ export const babylonRoutes = {
                 cameraMode = 'thirdperson';
             else if (cameraMode === 'thirdperson') {
                 cameraMode = 'topdown';
+                camera.position = mesh.position.add(new BABYLON.Vector3(0, 20, -8));
                 camera.rotation.set(0,0,Math.PI);
                 camera.setTarget(mesh.position);
             }
@@ -301,22 +305,22 @@ export const babylonRoutes = {
 
         //various controls
         let forward = () => {
-            let v = globalDirection ? BABYLON.Vector3.Forward() : mesh.getDirection(BABYLON.Vector3.Forward());
+            let v = cameraMode === 'topdown' ? BABYLON.Vector3.Forward() : mesh.getDirection(BABYLON.Vector3.Forward());
             velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
         let backward = () => {
-            let v = globalDirection ? BABYLON.Vector3.Backward() : mesh.getDirection(BABYLON.Vector3.Backward());
+            let v = cameraMode === 'topdown' ? BABYLON.Vector3.Backward() : mesh.getDirection(BABYLON.Vector3.Backward());
             velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
         let left = () => {
-            let v = globalDirection ? BABYLON.Vector3.Left() : mesh.getDirection(BABYLON.Vector3.Left());
+            let v = cameraMode === 'topdown' ? BABYLON.Vector3.Left() : mesh.getDirection(BABYLON.Vector3.Left());
             velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
         let right = () => {
-            let v = globalDirection ? BABYLON.Vector3.Right() : mesh.getDirection(BABYLON.Vector3.Right());
+            let v = cameraMode === 'topdown' ? BABYLON.Vector3.Right() : mesh.getDirection(BABYLON.Vector3.Right());
             velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
             physics.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
         };
@@ -418,7 +422,7 @@ export const babylonRoutes = {
             let removed = false;
             const removeBullet = (contacting?:string) => {
                 removed = true;
-                bullet.receiveShadows = false;
+                //bullet.receiveShadows = false;
                 const physicsWorker = (this.__node.graph as WorkerService).workers[(ctx as WorkerCanvas).physicsPort];
                 let pulse = {x:impulse.x*100,y:impulse.y*100,z:impulse.z*100};
                 if(contacting) physicsWorker.post('updatePhysicsEntity', [contacting, { impulse:pulse }]);
@@ -1080,16 +1084,16 @@ export const babylonRoutes = {
     ) {
         if(!ctx || typeof ctx === 'string')
             ctx = this.__node.graph.run('getCanvas',ctx);
-
+    
         if(typeof ctx !== 'object') return undefined;
-
+    
         if(settings._id && this.__node.graph.get(settings._id)) return settings._id; //already established
-
+    
         const scene = ctx.scene as BABYLON.Scene;
-
-        let entity: PhysicsMesh | undefined;
+        let entity: PhysicsMesh | undefined; // Assuming PhysicsMesh is a type alias for BABYLON.Mesh
+    
         //limited settings rn for simplicity to work with the physics engine
-        
+                
         if(settings.collisionType === 'ball') {
             if(!settings._id) settings._id = `ball${Math.floor(Math.random()*1000000000000000)}`
             
@@ -1145,7 +1149,84 @@ export const babylonRoutes = {
             });
         } 
 
+        // right now instances break navmeshes 
+        // let template = scene.getMeshById(settings.collisionType+'TEMPLATE') as BABYLON.Mesh;
+        // if (!template) {
+        //     // Creation logic for each template type
+        //     switch (settings.collisionType) {
+        //         case 'ball':
+        //             template = BABYLON.MeshBuilder.CreateSphere(settings.collisionType+'TEMPLATE', { diameter: 2, segments: 8 }, scene);
+        //             break;
+        //         case 'capsule':
+        //             template = BABYLON.MeshBuilder.CreateCapsule(settings.collisionType+'TEMPLATE', {
+        //                 radius: 1,
+        //                 height: 4,
+        //                 tessellation: 12,
+        //                 capSubdivisions: 12
+        //             }, scene);
+        //             break;
+        //         case 'cuboid':
+        //             template = BABYLON.MeshBuilder.CreateBox(settings.collisionType+'TEMPLATE', { width: 1, height: 1, depth: 1 }, scene);
+        //             break;
+        //         case 'cylinder':
+        //             template = BABYLON.MeshBuilder.CreateCylinder(settings.collisionType+'TEMPLATE', { height: 2, diameter: 2, tessellation: 12 }, scene);
+        //             break;
+        //         case 'cone':
+        //             template = BABYLON.MeshBuilder.CreateCylinder(settings.collisionType+'TEMPLATE', { height: 2, diameterTop: 0, diameterBottom: 2, tessellation: 12 }, scene);
+        //             break;
+        //     }
+        //     template.isVisible = false;
+        //     template.isPickable = false;
+        //     template.receiveShadows = true;
+        // }
+    
+        // if (!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random() * 1000000000000000)}`;
+        // entity = template.createInstance(settings._id) as PhysicsMesh;
+
+        // // Apply settings to the instance
+        // if (settings.position) {
+        //     entity.position = new BABYLON.Vector3(settings.position.x, settings.position.y, settings.position.z);
+        // }
+    
+        // if (settings.rotation) {
+        //     entity.rotation = new BABYLON.Vector3(settings.rotation.x, settings.rotation.y, settings.rotation.z);
+        // }
+
+        // // Apply original dimensions, radius, or halfHeight settings with proper scaling
+        // switch (settings.collisionType) {
+        //     case 'ball':
+        //         if(!settings.radius) settings.radius = 1;
+        //         let radius = settings.radius ? settings.radius : settings.collisionTypeParams ? settings.collisionTypeParams[0] : 1;
+        //         entity.scaling = new BABYLON.Vector3(radius,radius,radius);
+        //         break;
+        //     case 'capsule':
+        //         let heightScale = settings.halfHeight ? settings.halfHeight : settings.collisionTypeParams ? settings.collisionTypeParams[1] : 2
+        //         //entity.scaling = new BABYLON.Vector3( settings.radius, settings.radius, settings.radius); // Adjust capsule scaling appropriately
+        //         break;
+        //     case 'cuboid':
+        //         let dimensions = settings.dimensions ? settings.dimensions : settings.collisionTypeParams ? {
+        //             width:settings.collisionTypeParams[0],
+        //             height:settings.collisionTypeParams[1],
+        //             depth:settings.collisionTypeParams[2]
+        //         } : {width:1,height:1,depth:1}
+        //         entity.scaling = new BABYLON.Vector3(
+        //             dimensions.width,
+        //             dimensions.height,
+        //             dimensions.depth
+        //         );
+        //         break;
+        //     case 'cylinder':
+        //     case 'cone':
+        //         if(!settings.radius) settings.radius = 1;
+        //         let radius2 = settings.radius ? settings.radius : settings.collisionTypeParams ? settings.collisionTypeParams[0] : 1;
+        //         entity.scaling = new BABYLON.Vector3(radius2,radius2,radius2);
+        //         break;
+        // }
+        
+    
         if(entity) {
+
+            entity.receiveShadows = true; //comment for instances
 
             entity.dynamic = settings.dynamic;
             entity.crowd = settings.crowd;
@@ -1167,7 +1248,6 @@ export const babylonRoutes = {
                 );
             } else entity.rotationQuaternion = new BABYLON.Quaternion();
         
-            entity.receiveShadows = true;
 
             if(ctx.shadowGenerator) {
                 (ctx.shadowGenerator as BABYLON.ShadowGenerator).addShadowCaster(entity);
@@ -1245,7 +1325,9 @@ export const babylonRoutes = {
             const entities = ctx.entities as PhysicsEntityProps[];
 
             entities.forEach((e,i) => { //array
-                let mesh = scene.getMeshByName(e._id as string) as PhysicsMesh;
+                
+                let mesh = scene.getNodeByName(e._id as string) as PhysicsMesh//scene.getMeshByName(e._id as string) as PhysicsMesh;
+
                 if(mesh?.dynamic) {
                     let j = i*offset;
 
@@ -1271,7 +1353,7 @@ export const babylonRoutes = {
         else if(typeof data === 'object') { //key-value pairs
             for(const key in data.buffer) {
                 //if(idx === 0) { idx++; continue; }
-                let mesh = scene.getMeshByName(key) as PhysicsMesh;
+                let mesh = scene.getNodeByName(key) as PhysicsMesh;//scene.getMeshByName(key) as PhysicsMesh;
                 //console.log(JSON.stringify(mesh?.rotation),JSON.stringify(data[key].rotation))
                 if(mesh) {
                     if(data.buffer[key].position) {
@@ -1309,7 +1391,7 @@ export const babylonRoutes = {
         // const engine = ctx.engine as BABYLON.Engine;
         const scene = ctx.scene as BABYLON.Scene;
 
-        let mesh = scene.getMeshByName(_id) as PhysicsMesh;
+        let mesh = scene.getNodeByName(_id as string) as PhysicsMesh;//scene.getMeshByName(_id) as PhysicsMesh;
         if(!mesh) return undefined; //already removed
 
         if(ctx.crowds) {
@@ -1828,7 +1910,7 @@ export const babylonRoutes = {
         // const engine = ctx.engine as BABYLON.Engine;
         const scene = ctx.scene as BABYLON.Scene;
 
-        let mesh = scene.getMeshByName(meshId) as PhysicsMesh;
+        let mesh = scene.getNodeByName(meshId) as PhysicsMesh;//scene.getMeshByName(meshId) as PhysicsMesh;
         if(!mesh) return undefined; //already removed
 
         if(ctx.crowds) {
