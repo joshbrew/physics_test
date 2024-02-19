@@ -26,7 +26,7 @@ export class FlowField {
             this.width = options.width;
             this.height = options.height;
         }
-        if(options.avoidObstacles) options.avoidObstacles = true;
+        if('avoidObstacles' in options) this.avoidObstacles = options.avoidObstacles;
         if(options.maxValue) this.maxValue = options.maxValue;
         if('avoidance' in options) this.avoidance = options.avoidance;
         if('avoidanceDampen' in options) this.avoidanceDampen = options.avoidanceDampen;

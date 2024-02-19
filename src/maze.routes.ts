@@ -1,14 +1,41 @@
+import { AStarSolver } from './maze/astar';
+import { Maze } from './maze/maze'
+import { FlowField } from './maze/flowfield'
 
-
+import { generateHuntAndKillWithBraidsMaze, noDeadEndsSpiral } from './maze/generators'
 
 export const mazeRoutes = {
 
     //lets use the hunt and kill with braids octagonal configuration, we need square and octagonal cells
-    createMaze:function() {
+    createMaze:function(width=20,height=20,type:'huntandkill'|'spiral'='huntandkill',seed,allowDiagonal) {
 
+        let generator = type === 'huntandkill' ? generateHuntAndKillWithBraidsMaze : noDeadEndsSpiral;
         //create a maze grid with a desired generator function,
+        let maze = new Maze(width,height,generator,undefined,seed,allowDiagonal);
+        let flowfield = new FlowField({
+            maze,
+            allowDiagonal,
+            avoidance:2,
+            avoidanceDampen:1.5
+        });
 
+        this.__node.graph.maze = maze;
+        this.__node.graph.flowfield = flowfield;
+
+        let doors = [
+            'red',
+            'blue'
+        ];
+        
         //assign maze information to meshes for correlating raycasts, otherwise we will use worldspace to correlate
+        maze.addDoorsAndKeys(
+            maze.start,
+            maze.end,
+            doors,
+            Math.floor(Math.min(width,height)/doors.length),
+            allowDiagonal,
+            'last'
+        );
 
         //create instances to represent maze grid, figure out a lighting solution
 
@@ -35,8 +62,8 @@ export const mazeRoutes = {
 
         //ai activate on player sight, should maybe just raycast to the grid
 
-
-        //send maze data to render thread to initialize it
+        //send maze data to render thread to initialize the render
+        return maze;
     },
 
 
