@@ -135,14 +135,14 @@ export async function createRenderer(
 
         //update physics trajectories using the navmesh
         physics.post('subscribeToWorker', [
-            'animateCrowd',
+            'stepCrowd', //loop triggered by createCrowd and reports to subscribers
             navPhysicsPort,
             'updatePhysicsEntities'
         ]);
 
         //update entity positions from the physics thread
         navigation.post('subscribeToWorker',[
-            'stepWorld',
+            'stepWorld', //loop triggered by animateWorld and reports to subscribers
             navPhysicsPort,
             'updateBabylonEntities'
         ]);
